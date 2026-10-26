@@ -60,10 +60,31 @@ pub async fn install(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     let setup_path = cache.join("EAappInstaller.exe");
     std::fs::write(&setup_path, setup).map_err(|e| e.to_string())?;
 
+    register_dotnet(app, cfg).await?;
     wine::log(app, INSTALL_TASK, "Ejecutando el instalador. Sigue los pasos en su ventana.");
     let mut cmd = wine::command(cfg)?;
     cmd.arg(&setup_path);
     wine::spawn_logged(app, INSTALL_TASK, cmd);
+    Ok(())
+}
+
+/// Where .NET is installed, which the installer's .NET custom actions look
+/// up. GE-Proton's prefixes run Wine Mono from the Proton build without these
+/// keys, and the MSI then fails with error 1603 (`0x80070643`).
+const DOTNET_INSTALL_ROOTS: &[(&str, &str)] = &[
+    ("/reg:64", r"C:\windows\Microsoft.NET\Framework64\"),
+    ("/reg:32", r"C:\windows\Microsoft.NET\Framework\"),
+];
+
+async fn register_dotnet(app: &AppHandle, cfg: &Config) -> Result<(), String> {
+    for (view, root) in DOTNET_INSTALL_ROOTS {
+        let mut cmd = wine::tool_command(cfg)?;
+        cmd.args(["reg", "add", r"HKLM\Software\Microsoft\.NETFramework", "/v", "InstallRoot", "/d", root, "/f", view])
+            .kill_on_drop(true);
+        tokio::time::timeout(std::time::Duration::from_secs(60), wine::run_logged(app, INSTALL_TASK, cmd))
+            .await
+            .map_err(|_| "Wine no respondió al preparar el prefijo de la EA app".to_string())??;
+    }
     Ok(())
 }
 
