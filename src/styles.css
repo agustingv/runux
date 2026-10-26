@@ -258,6 +258,18 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
   height: 36px; padding: 0 8px; border-radius: 6px; font: inherit; font-weight: 400;
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
 }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; gap: 6px; font-size: 13px; color: var(--muted); }
+.steps li { flex: 1; display: flex; align-items: center; gap: 6px; padding-top: 8px; border-top: 2px solid var(--border); }
+.steps li.done { border-color: var(--green); }
+.steps li.current { border-color: var(--blue); color: var(--text); font-weight: 600; }
+.step-num { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--bg-hover); font-size: 11px; font-weight: 700; }
+.steps li.done .step-num { background: var(--green); color: var(--bg); }
+.steps li.current .step-num { background: var(--blue); color: #fff; }
+.step-box { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 6px; background: var(--bg); border: 1px solid var(--blue); font-weight: 400; }
+.choice-list li { cursor: pointer; }
+.choice-list li.selected { border-color: var(--blue); }
+.choice-list input { margin: 0; accent-color: var(--blue); }
+.modal footer .footer-start { margin-right: auto; }
 .segmented { display: flex; padding: 3px; gap: 3px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
 .segmented button { flex: 1; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-weight: 600; }
 .segmented button.active { background: var(--bg-hover); color: var(--text); }
