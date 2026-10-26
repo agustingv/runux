@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { formatBytes, GE_PROTON_TASK, type Progress, type Status } from "../api";
+import { EA_INSTALL_TASK, formatBytes, GE_PROTON_TASK, type Progress, type Status } from "../api";
 import { CheckIcon } from "../icons";
+import { Missing32Bit } from "./Missing32Bit";
 
 interface Props {
   status: Status;
@@ -9,6 +10,7 @@ interface Props {
   onCreatePrefix: () => void;
   onInstallDxvk: () => void;
   onInstallBattlenet: () => void;
+  onInstallEa: () => void;
   onOpenSettings: () => void;
   /** Downloads GE-Proton and the runtime it needs. */
   onInstallGeProton: () => void;
@@ -56,11 +58,12 @@ export function Setup(props: Props) {
 
   return (
     <div className="setup">
-      <h1>Configurar Battle.net en Linux</h1>
+      <h1>Configurar Runux</h1>
       <p className="muted">
-        Runux prepara un prefijo {isProton ? "de Proton" : "de Wine"} aislado, instala el cliente oficial de Battle.net y
-        después detecta y lanza tus juegos desde aquí.
+        Runux prepara prefijos {isProton ? "de Proton" : "de Wine"} aislados, instala los clientes oficiales de
+        Battle.net y la EA app y después detecta y lanza tus juegos desde aquí.
       </p>
+      {status.missing32bit && <Missing32Bit missing={status.missing32bit} />}
 
       <ol className="steps">
         <Step
@@ -99,8 +102,8 @@ export function Setup(props: Props) {
           done={status.prefixExists}
           description={
             isProton
-              ? "Un entorno Windows dedicado solo a Battle.net. Proton ya incluye DXVK y VKD3D."
-              : "Un entorno Windows de 64 bits dedicado solo a Battle.net."
+              ? "Un entorno Windows dedicado a Battle.net. Proton ya incluye DXVK y VKD3D. La EA app crea el suyo al instalarla."
+              : "Un entorno Windows de 64 bits dedicado a Battle.net. La EA app crea el suyo al instalarla."
           }
         >
           {!status.prefixExists && (
@@ -131,26 +134,50 @@ export function Setup(props: Props) {
 
         <Step
           n={isProton ? 3 : 4}
-          title="Battle.net"
-          done={status.battlenetInstalled}
-          description={
-            busy.has("installer")
-              ? "Instalador en marcha: sigue los pasos en su ventana. Este paso se completará solo."
-              : "Descarga el instalador oficial de Blizzard y lo ejecuta dentro del prefijo."
-          }
+          title="Battle.net y EA app"
+          done={status.battlenetInstalled || status.eaInstalled}
+          description="Instala al menos uno de los dos clientes. El otro puedes añadirlo después desde la pantalla de inicio."
         >
-          {!status.battlenetInstalled && (
-            <>
+          <div className="store-options">
+            <div className="store-option">
+              <div className="store-text">
+                <b>Battle.net</b>
+                <span className="muted">
+                  {busy.has("installer")
+                    ? "Instalador en marcha: sigue los pasos en su ventana. Este paso se completará solo."
+                    : status.prefixExists
+                      ? "Descarga el instalador oficial de Blizzard y lo ejecuta en su prefijo."
+                      : "Crea primero el prefijo del paso 2."}
+                </span>
+                {busy.has("installer") && <ProgressBar p={progress.installer} />}
+              </div>
               <button
                 className="play-btn small"
                 disabled={!status.prefixExists || busy.has("installer")}
                 onClick={props.onInstallBattlenet}
               >
-                {busy.has("installer") ? "Instalando…" : "Descargar e instalar"}
+                {busy.has("installer") ? "Instalando…" : "Instalar"}
               </button>
-              {busy.has("installer") && <ProgressBar p={progress.installer} />}
-            </>
-          )}
+            </div>
+            <div className="store-option">
+              <div className="store-text">
+                <b>EA app</b>
+                <span className="muted">
+                  {busy.has(EA_INSTALL_TASK)
+                    ? "Instalador en marcha: sigue los pasos en su ventana. Este paso se completará solo."
+                    : "Descarga el instalador oficial de Electronic Arts y lo ejecuta en un prefijo propio."}
+                </span>
+                {busy.has(EA_INSTALL_TASK) && <ProgressBar p={progress[EA_INSTALL_TASK]} />}
+              </div>
+              <button
+                className="play-btn small"
+                disabled={!wineOk || busy.has(EA_INSTALL_TASK)}
+                onClick={props.onInstallEa}
+              >
+                {busy.has(EA_INSTALL_TASK) ? "Instalando…" : "Instalar"}
+              </button>
+            </div>
+          </div>
         </Step>
       </ol>
     </div>

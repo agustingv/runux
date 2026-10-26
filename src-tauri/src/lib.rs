@@ -5,6 +5,7 @@ mod dxvk;
 mod ea;
 mod external;
 mod games;
+mod host;
 mod productdb;
 mod proton;
 mod wine;
@@ -50,6 +51,8 @@ struct Status {
     ea_running: bool,
     /// The EA app's in-game overlay; `None` before anyone signs in.
     ea_overlay: Option<bool>,
+    /// Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing.
+    missing_32bit: Option<host::Missing32Bit>,
 }
 
 #[tauri::command]
@@ -82,6 +85,7 @@ async fn get_status(state: State<'_, AppState>) -> Result<Status, String> {
         ea_installed: ea::installed(&cfg.ea()),
         ea_running: ea::running(&cmdlines),
         ea_overlay: ea::overlay_enabled(&cfg.ea()),
+        missing_32bit: host::missing_32bit_graphics(),
     })
 }
 

@@ -48,6 +48,8 @@ export interface Status {
   battlenetRunning: boolean;
   scummvmInstalled: boolean;
   eaInstalled: boolean;
+  /** Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing. */
+  missing32bit: { command: string | null } | null;
   eaRunning: boolean;
   /** The EA app's in-game overlay; `null` before anyone signs in. */
   eaOverlay: boolean | null;

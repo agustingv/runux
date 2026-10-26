@@ -1,4 +1,5 @@
 import { initials, type EaGame, type ExternalGame, type Game, type Progress, type Status } from "../api";
+import { Missing32Bit } from "./Missing32Bit";
 import { ProgressBar } from "./Setup";
 import { eaKey, externalKey } from "./Sidebar";
 
@@ -8,6 +9,9 @@ interface Props {
   external: ExternalGame[];
   eaGames: EaGame[];
   battlenetStarting: boolean;
+  battlenetInstalling: boolean;
+  battlenetProgress?: Progress;
+  onInstallBattlenet: () => void;
   onOpenBattlenet: () => void;
   onCloseBattlenet: () => void;
   onSelect: (uid: string) => void;
@@ -56,34 +60,69 @@ function EaCard({ status, ea }: { status: Status; ea: EaProps }) {
   );
 }
 
-export function Home({ status, games, external, eaGames, battlenetStarting, onOpenBattlenet, onCloseBattlenet, onSelect, ea }: Props) {
+function BattlenetCard({ status, starting, installing, progress, onInstall, onOpen, onClose }: {
+  status: Status;
+  starting: boolean;
+  installing: boolean;
+  progress?: Progress;
+  onInstall: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const installed = status.prefixExists && status.battlenetInstalled;
+  const description = installing
+    ? "Instalador en marcha: sigue los pasos en su ventana. Al terminar podrás abrirlo desde aquí."
+    : !installed
+      ? "Instala el cliente oficial de Blizzard en un prefijo propio, aparte del de la EA app."
+      : status.battlenetRunning
+        ? "El cliente está abierto. Instala, actualiza o repara juegos desde su ventana."
+        : "Abre el cliente para iniciar sesión, instalar juegos o aplicar actualizaciones.";
+  return (
+    <section className="card hero">
+      <div>
+        <h2>Battle.net</h2>
+        <p className="muted">{description}</p>
+        {installing && <ProgressBar p={progress} />}
+      </div>
+      {!installed ? (
+        <button className="play-btn" onClick={onInstall} disabled={installing || !status.runnerOk}>
+          {installing ? "Instalando…" : "Instalar Battle.net"}
+        </button>
+      ) : status.battlenetRunning ? (
+        <div className="hero-actions">
+          <button className="ghost-btn danger" onClick={onClose}>Cerrar</button>
+          <button className="play-btn" disabled>Abierto</button>
+        </div>
+      ) : (
+        <button className="play-btn" onClick={onOpen} disabled={starting}>
+          {starting ? "Abriendo…" : "Abrir Battle.net"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+export function Home({
+  status, games, external, eaGames, battlenetStarting, battlenetInstalling, battlenetProgress,
+  onInstallBattlenet, onOpenBattlenet, onCloseBattlenet, onSelect, ea,
+}: Props) {
   return (
     <div className="home">
-      <section className="card hero">
-        <div>
-          <h2>Battle.net</h2>
-          <p className="muted">
-            {status.battlenetRunning
-              ? "El cliente está abierto. Instala, actualiza o repara juegos desde su ventana."
-              : "Abre el cliente para iniciar sesión, instalar juegos o aplicar actualizaciones."}
-          </p>
-        </div>
-        {status.battlenetRunning ? (
-          <div className="hero-actions">
-            <button className="ghost-btn danger" onClick={onCloseBattlenet}>Cerrar</button>
-            <button className="play-btn" disabled>Abierto</button>
-          </div>
-        ) : (
-          <button className="play-btn" onClick={onOpenBattlenet} disabled={battlenetStarting}>
-            {battlenetStarting ? "Abriendo…" : "Abrir Battle.net"}
-          </button>
-        )}
-      </section>
+      {status.missing32bit && <Missing32Bit missing={status.missing32bit} />}
+      <BattlenetCard
+        status={status}
+        starting={battlenetStarting}
+        installing={battlenetInstalling}
+        progress={battlenetProgress}
+        onInstall={onInstallBattlenet}
+        onOpen={onOpenBattlenet}
+        onClose={onCloseBattlenet}
+      />
 
       <EaCard status={status} ea={ea} />
 
-      <h3 className="section-title">Tus juegos</h3>
-      {games.length === 0 ? (
+      {status.battlenetInstalled && <h3 className="section-title">Juegos de Battle.net</h3>}
+      {!status.battlenetInstalled ? null : games.length === 0 ? (
         <div className="card empty">
           <p>Todavía no hay juegos.</p>
           <p className="muted">

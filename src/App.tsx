@@ -196,7 +196,14 @@ export default function App() {
 
   const guard = (fn: () => Promise<unknown>) => () => fn().catch((e) => setError(errorMessage(e)));
 
-  const ready = status?.prefixExists && status.battlenetInstalled;
+  // Either client is enough to start: the other can be installed from Home.
+  const ready = status && ((status.prefixExists && status.battlenetInstalled) || status.eaInstalled);
+  const installEa = () => startTask(EA_INSTALL_TASK, api.installEa);
+  const installBattlenet = () =>
+    startTask("installer", async () => {
+      if (!status?.prefixExists) await api.createPrefix();
+      await api.installBattlenet();
+    });
   const game = games.find((g) => g.uid === selected);
   const ext = external.find((g) => externalKey(g.id) === selected);
   const eaGame = eaGames.find((g) => eaKey(g.id) === selected);
@@ -287,7 +294,8 @@ export default function App() {
               progress={progress}
               onCreatePrefix={() => runTask("prefix", api.createPrefix)}
               onInstallDxvk={() => runTask("dxvk", api.installDxvk)}
-              onInstallBattlenet={() => startTask("installer", api.installBattlenet)}
+              onInstallBattlenet={installBattlenet}
+              onInstallEa={installEa}
               onOpenSettings={() => setShowSettings(true)}
               onInstallGeProton={() => runTask(GE_PROTON_TASK, api.installGeProton)}
             />
@@ -309,6 +317,9 @@ export default function App() {
               external={external}
               eaGames={eaGames}
               battlenetStarting={busy.has("battlenet") && !status.battlenetRunning}
+              battlenetInstalling={busy.has("installer")}
+              battlenetProgress={progress.installer}
+              onInstallBattlenet={installBattlenet}
               onOpenBattlenet={openBattlenet}
               onCloseBattlenet={guard(async () => {
                 await api.closeBattlenet();
@@ -319,7 +330,7 @@ export default function App() {
                 starting: busy.has(EA_TASK) && !status.eaRunning,
                 installing: busy.has(EA_INSTALL_TASK),
                 progress: progress[EA_INSTALL_TASK],
-                onInstall: () => startTask(EA_INSTALL_TASK, api.installEa),
+                onInstall: installEa,
                 onOpen: () => startTask(EA_TASK, api.launchEa),
                 onClose: guard(async () => {
                   await api.closeEa();
