@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Runux instala Battle.net y la EA app en Linux con Proton o Wine, sin necesidad de Steam.">
+<title>Descargar Runux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a garnet band carries the name and the two packages; quieter sections below. */
+:root {
+  --garnet: #7b1e2e;
+  --garnet-deep: #561320;
+  --garnet-ink: #ffffff;
+  --rose: #f2c9cf;
+  --bg: #faf6f6;
+  --surface: #ffffff;
+  --text: #24161a;
+  --muted: #6e5a5f;
+  --line: #e7dadc;
+  --code-bg: #f3ecec;
+  --ok: #2f7a4b;
+  --error: #b42318;
+  --font-display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --garnet: #8c2436; --garnet-deep: #4a0f1b; --garnet-ink: #fff4f5; --rose: #f0b8c1;
+    --bg: #150b0d; --surface: #1f1215; --text: #f3e9eb; --muted: #b9a2a7; --line: #3a2328;
+    --code-bg: #2a181c; --ok: #6cc690; --error: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --garnet: #8c2436; --garnet-deep: #4a0f1b; --garnet-ink: #fff4f5; --rose: #f0b8c1;
+  --bg: #150b0d; --surface: #1f1215; --text: #f3e9eb; --muted: #b9a2a7; --line: #3a2328;
+  --code-bg: #2a181c; --ok: #6cc690; --error: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 400 1.0625rem/1.6 var(--font-body);
+}
+.wrap {
+  max-width: 68rem; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+code, .mono { font-family: var(--font-mono); font-size: 0.875em; }
+
+/* Garnet band */
+.band {
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, color-mix(in srgb, var(--rose) 18%, transparent), transparent 70%),
+    linear-gradient(160deg, var(--garnet), var(--garnet-deep));
+  color: var(--garnet-ink);
+}
+.band .wrap { padding-block: 1.5rem 3.5rem; display: grid; gap: 3rem; }
+.brand { display: flex; align-items: center; gap: 0.75rem; font: 700 1.125rem var(--font-display); }
+.mark {
+  display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.5rem;
+  background: var(--garnet-ink); color: var(--garnet); font: 700 1.125rem var(--font-display);
+}
+.version {
+  margin-left: auto; font: 600 0.8125rem var(--font-mono); letter-spacing: 0.02em;
+  padding: 0.25rem 0.6rem; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--garnet-ink) 40%, transparent);
+}
+.hero { display: grid; gap: 1rem; max-width: 46rem; }
+.hero h1 { font: 700 clamp(2rem, 5.5vw, 3.5rem)/1.08 var(--font-display); letter-spacing: -0.01em; }
+.hero p { font-size: 1.1875rem; max-width: 38rem; color: color-mix(in srgb, var(--garnet-ink) 86%, transparent); }
+
+.packages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
+.pkg {
+  background: var(--surface); color: var(--text);
+  border-radius: 0.875rem; padding: 1.5rem;
+  display: grid; gap: 1rem; align-content: start; min-width: 0;
+  box-shadow: 0 1.25rem 2.5rem -1.5rem rgb(0 0 0 / 0.45);
+}
+.pkg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.pkg h2 { font: 700 1.25rem var(--font-display); }
+.pkg .distros { color: var(--muted); font-size: 0.9375rem; }
+.ext { font: 600 0.875rem var(--font-mono); color: var(--garnet); }
+:root[data-theme="dark"] .ext { color: var(--rose); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ext { color: var(--rose); } }
+
+.dl {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+  min-height: 3rem; padding: 0 1.25rem; border-radius: 0.625rem; border: 0;
+  background: var(--garnet); color: var(--garnet-ink);
+  font: 700 1rem var(--font-body); cursor: pointer; text-decoration: none;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.dl:hover { background: var(--garnet-deep); }
+.dl:active { transform: translateY(1px); }
+.dl:focus-visible, .copy:focus-visible { outline: 3px solid var(--rose); outline-offset: 2px; }
+.dl svg { width: 1.125rem; height: 1.125rem; flex: none; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+
+.cmd { display: grid; gap: 0.375rem; min-width: 0; }
+.cmd-label { font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.cmd-box {
+  display: flex; align-items: center; gap: 0.5rem; min-width: 0;
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+}
+.cmd-box code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding-block: 0.5rem; }
+.copy {
+  flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  border-radius: 0.375rem; padding: 0.35rem 0.7rem; font: 600 0.8125rem var(--font-body); cursor: pointer;
+}
+.copy:hover { border-color: var(--muted); }
+.sha { font-size: 0.75rem; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Quieter sections */
+main .wrap { padding-block: 3.5rem; display: grid; gap: 3.5rem; }
+.section { display: grid; gap: 1.25rem; }
+.section h2 { font: 700 1.375rem var(--font-display); }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1.75rem 2rem; margin: 0; padding: 0; list-style: none; }
+.features li { display: grid; align-content: start; gap: 0.35rem; padding-top: 1rem; border-top: 2px solid var(--garnet); min-width: 0; }
+.features h3 { font: 700 1.0625rem var(--font-body); }
+.features p { color: var(--muted); }
+
+.reqs { display: grid; grid-template-columns: max-content 1fr; gap: 0.625rem 1.5rem; margin: 0; max-width: 46rem; }
+.reqs dt { font-weight: 700; }
+.reqs dd { margin: 0; color: var(--muted); min-width: 0; }
+.steps { margin: 0; padding-left: 1.25rem; display: grid; gap: 0.5rem; max-width: 46rem; }
+.steps li::marker { color: var(--garnet); font-weight: 700; }
+
+footer { border-top: 1px solid var(--line); }
+footer a { color: inherit; }
+footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.875rem; }
+
+@media (max-width: 34rem) {
+  .reqs { grid-template-columns: 1fr; gap: 0.125rem; }
+  .reqs dd { margin-bottom: 0.625rem; }
+}
+@media (prefers-reduced-motion: reduce) { .dl { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="wrap">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">R</span>
+      Runux
+      <span class="version">v@VERSION@</span>
+    </div>
+
+    <div class="hero">
+      <h1>Tus juegos de Windows, en Linux.</h1>
+      <p>Runux instala Battle.net y la EA app en prefijos de Proton o Wine, encuentra sus juegos y los abre con un clic. No necesitas Steam.</p>
+    </div>
+
+    <div class="packages">
+      <article class="pkg" aria-labelledby="deb-title">
+        <div class="pkg-head">
+          <h2 id="deb-title">Debian y Ubuntu</h2>
+          <span class="ext">.deb</span>
+        </div>
+        <p class="distros">También Linux Mint, Pop!_OS, elementary OS y derivadas.</p>
+        <div>
+          <a class="dl" href="@DEB_URL@">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            Descargar .deb
+          </a>
+        </div>
+        <div class="meta"><span>@DEB_SIZE@</span><span>x86_64</span></div>
+        <div class="cmd">
+          <span class="cmd-label">Instalar</span>
+          <div class="cmd-box">
+            <code>sudo apt install ./@DEB@</code>
+            <button class="copy" type="button">Copiar</button>
+          </div>
+        </div>
+        <p class="sha mono">SHA-256 del .deb: @DEB_SHA256@</p>
+      </article>
+
+      <article class="pkg" aria-labelledby="rpm-title">
+        <div class="pkg-head">
+          <h2 id="rpm-title">Fedora y openSUSE</h2>
+          <span class="ext">.rpm</span>
+        </div>
+        <p class="distros">También Nobara y derivadas. En openSUSE, cambia <code>dnf</code> por <code>zypper</code>.</p>
+        <div>
+          <a class="dl" href="@RPM_URL@">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            Descargar .rpm
+          </a>
+        </div>
+        <div class="meta"><span>@RPM_SIZE@</span><span>x86_64</span></div>
+        <div class="cmd">
+          <span class="cmd-label">Instalar</span>
+          <div class="cmd-box">
+            <code>sudo dnf install ./@RPM@</code>
+            <button class="copy" type="button">Copiar</button>
+          </div>
+        </div>
+        <p class="sha mono">SHA-256 del .rpm: @RPM_SHA256@</p>
+      </article>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="section" aria-labelledby="features-title">
+      <h2 id="features-title">Qué hace</h2>
+      <ul class="features">
+        <li>
+          <h3>Battle.net y la EA app</h3>
+          <p>Las instala desde sus instaladores oficiales, cada una en su propio prefijo, y lanza sus juegos sin pasar por el cliente.</p>
+        </li>
+        <li>
+          <h3>Proton sin Steam</h3>
+          <p>Descarga GE-Proton desde Ajustes. Si ya tienes Steam, usa también sus versiones de Proton.</p>
+        </li>
+        <li>
+          <h3>Instala desde ISO o DVD</h3>
+          <p>Monta todas las ISO de una carpeta a la vez, para los instaladores que piden cambiar de disco.</p>
+        </li>
+        <li>
+          <h3>Solución de problemas</h3>
+          <p>Interruptores para los fallos típicos de juegos antiguos (ratón que no responde, demasiados núcleos) y variables de entorno por juego.</p>
+        </li>
+        <li>
+          <h3>Juegos sueltos</h3>
+          <p>Añade cualquier ejecutable de Windows o juegos de ScummVM a la misma biblioteca.</p>
+        </li>
+        <li>
+          <h3>Desinstalar</h3>
+          <p>Quita juegos de Battle.net y de EA con sus desinstaladores oficiales, desde la ficha del juego.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="reqs-title">
+      <h2 id="reqs-title">Requisitos</h2>
+      <dl class="reqs">
+        <dt>Sistema</dt>
+        <dd>Linux de 64 bits (x86_64).</dd>
+        <dt>Gráficos</dt>
+        <dd>Una tarjeta con Vulkan y sus controladores al día. Proton traduce DirectX a Vulkan.</dd>
+        <dt>Dependencias</dt>
+        <dd><code>webkit2gtk-4.1</code>, <code>udisks2</code> y <code>python3</code>. El gestor de paquetes las instala solo.</dd>
+        <dt>Espacio</dt>
+        <dd>Unos 600 MB para GE-Proton, más lo que ocupen Battle.net, la EA app y tus juegos.</dd>
+      </dl>
+    </section>
+
+    <section class="section" aria-labelledby="start-title">
+      <h2 id="start-title">Primeros pasos</h2>
+      <ol class="steps">
+        <li>Instala el paquete y abre Runux desde el menú de aplicaciones.</li>
+        <li>Si no tienes Steam, ve a Ajustes y pulsa <b>Descargar GE-Proton</b>.</li>
+        <li>Crea el prefijo e instala Battle.net o la EA app desde la pantalla de inicio.</li>
+        <li>Inicia sesión en el cliente e instala tus juegos. Aparecerán en Runux para lanzarlos.</li>
+      </ol>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Runux @VERSION@ · Agustín García · <a href="https://github.com/agustingv/runux">Código fuente</a></span>
+    <span>Runux no está afiliado a Blizzard Entertainment ni a Electronic Arts.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  document.querySelectorAll(".copy").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const code = btn.parentElement.querySelector("code");
+      try {
+        await navigator.clipboard.writeText(code.textContent);
+        btn.textContent = "Copiado";
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const sel = getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        btn.textContent = "Seleccionado";
+      }
+      setTimeout(() => { btn.textContent = "Copiar"; }, 1800);
+    });
+  });
+})();
+</script>
+</body>
+</html>

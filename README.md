@@ -24,3 +24,12 @@ Requisitos: Rust, las dependencias de sistema de Tauri (webkit2gtk-4.1) y Proton
 - Caché (instaladores): `~/.cache/runux/`
 
 Las carpetas de la versión anterior (`btn`) se mueven solas al primer arranque y queda un enlace en su lugar.
+
+## Publicar una versión
+
+1. Sube la versión en `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` y `package.json`.
+2. Haz commit y crea la etiqueta: `git tag v0.2.0 && git push origin main v0.2.0`.
+
+El flujo `.github/workflows/release.yml` compila el `.deb` y el `.rpm`, los publica en una
+GitHub Release y actualiza la página de descarga en GitHub Pages. La página es la plantilla
+`site/index.html`, que `site/render.py` rellena con la versión, los enlaces, tamaños y SHA-256.

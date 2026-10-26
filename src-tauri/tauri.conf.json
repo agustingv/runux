@@ -25,13 +25,34 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "deb",
+      "rpm"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Game",
+    "publisher": "Agustín García",
+    "shortDescription": "Lanzador de juegos de Windows para Linux",
+    "longDescription": "Runux instala y abre Battle.net y la EA app en prefijos de Wine o Proton, detecta sus juegos y los lanza. También instala juegos desde ISO o DVD y descarga GE-Proton sin necesidad de Steam.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "udisks2",
+          "python3"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "udisks2",
+          "python3"
+        ]
+      }
+    }
   }
 }
