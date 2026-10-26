@@ -1840,6 +1840,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
+name = "lzma-sys"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fda04ab3764e6cde78b9974eec4f779acaba7c4e84b36eca3cf77c581b85d27"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "markup5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2772,7 +2783,7 @@ dependencies = [
 
 [[package]]
 name = "runux"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dirs 6.0.0",
  "flate2",
@@ -2781,11 +2792,13 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
  "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tokio",
+ "xz2",
 ]
 
 [[package]]
@@ -4875,6 +4888,15 @@ checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
  "rustix",
+]
+
+[[package]]
+name = "xz2"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388c44dc09d76f1536602ead6d325eb532f5c122f17782bd57fb47baeeb767e2"
+dependencies = [
+ "lzma-sys",
 ]
 
 [[package]]

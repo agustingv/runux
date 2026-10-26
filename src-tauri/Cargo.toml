@@ -1,6 +1,6 @@
 [package]
 name = "runux"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lanzador de juegos de Windows para Linux: Battle.net, EA app y más"
 authors = ["Agustín García <contacto@agustin-garcia.es>"]
 edition = "2024"
@@ -28,6 +28,8 @@ futures-util = "0.3"
 dirs = "6"
 flate2 = "1"
 tar = "0.4"
+xz2 = { version = "0.1", features = ["static"] }
+sha2 = "0.10"
 tauri-plugin-dialog = "2"
 
 

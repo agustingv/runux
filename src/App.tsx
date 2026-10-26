@@ -289,6 +289,7 @@ export default function App() {
               onInstallDxvk={() => runTask("dxvk", api.installDxvk)}
               onInstallBattlenet={() => startTask("installer", api.installBattlenet)}
               onOpenSettings={() => setShowSettings(true)}
+              onInstallGeProton={() => runTask(GE_PROTON_TASK, api.installGeProton)}
             />
           ) : game ? (
             <GameView

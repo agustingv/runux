@@ -95,17 +95,22 @@ export function Settings({
             <div className="ge-proton">
               <button className="ghost-btn" onClick={installGeProton} disabled={installingGeProton}>
                 {installingGeProton
-                  ? pct === null ? "Buscando GE-Proton…" : `Descargando GE-Proton… ${pct}%`
+                  ? pct === null ? "Preparando la descarga…" : `Descargando… ${pct}%`
+                  : downloadedGe?.missingRuntime ? `Descargar ${downloadedGe.missingRuntime}`
                   : downloadedGe ? "Buscar actualización de GE-Proton" : "Descargar GE-Proton"}
               </button>
               <small className="muted">
                 {geResult && !installingGeProton
-                  ? geResult.updated
-                    ? `${geResult.version} descargado. Elígelo arriba o déjalo en Automático.`
-                    : `Ya tienes la última versión (${geResult.version}).`
+                  ? geResult.runtime
+                    ? `${geResult.runtime} descargado. ${geResult.version} ya está listo para usarse.`
+                    : geResult.updated
+                      ? `${geResult.version} descargado. Elígelo arriba o déjalo en Automático.`
+                      : `Ya tienes la última versión (${geResult.version}).`
+                  : downloadedGe?.missingRuntime
+                    ? <>Sin Steam, <b>{downloadedGe.name}</b> necesita {downloadedGe.missingRuntime} (unos 175 MB, de los servidores de Valve).</>
                   : downloadedGe
                     ? <>Descargado: <b>{downloadedGe.name}</b>. Si sale una versión nueva, se descarga junto a la que tienes.</>
-                    : "La última versión, desde GitHub (unos 600 MB). No necesita Steam. Elígela arriba o déjalo en Automático."}
+                    : "La última versión, desde GitHub (unos 600 MB), y el Steam Linux Runtime que necesita si no tienes Steam (unos 175 MB). Elígela arriba o déjalo en Automático."}
               </small>
             </div>
             <label>

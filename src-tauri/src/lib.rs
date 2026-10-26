@@ -39,6 +39,8 @@ struct Status {
     runner_label: Option<String>,
     /// Whether the runner can run Battle.net (64-bit wine, or a Proton build found).
     runner_ok: bool,
+    /// Why the runner can't be used, when known.
+    runner_problem: Option<String>,
     prefix_exists: bool,
     dxvk_version: Option<String>,
     battlenet_installed: bool,
@@ -65,12 +67,13 @@ fn set_config(state: State<'_, AppState>, config: Config) -> Result<(), String> 
 #[tauri::command]
 async fn get_status(state: State<'_, AppState>) -> Result<Status, String> {
     let cfg = state.config();
-    let (runner_label, runner_ok) = wine::runner_info(&cfg).await;
+    let (runner_label, runner_ok, runner_problem) = wine::runner_info(&cfg).await;
     let cmdlines = wine::running_cmdlines();
     Ok(Status {
         runner: cfg.runner,
         runner_label,
         runner_ok,
+        runner_problem,
         prefix_exists: wine::prefix_exists(&cfg),
         dxvk_version: dxvk::installed_version(&cfg),
         battlenet_installed: wine::battlenet_exe(&cfg).is_file(),

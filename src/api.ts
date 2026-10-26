@@ -23,6 +23,8 @@ export interface ProtonBuild {
   steamRoot: string;
   /** Downloaded by the app (GE-Proton) rather than found in Steam. */
   downloaded: boolean;
+  /** Steam Linux Runtime the build needs but that isn't installed. */
+  missingRuntime: string | null;
 }
 
 export interface GeInstall {
@@ -30,12 +32,16 @@ export interface GeInstall {
   version: string;
   /** False when that release was already installed. */
   updated: boolean;
+  /** Steam Linux Runtime downloaded along with it, if it was missing. */
+  runtime: string | null;
 }
 
 export interface Status {
   runner: Runner;
   runnerLabel: string | null;
   runnerOk: boolean;
+  /** Why the runner can't be used, when known. */
+  runnerProblem: string | null;
   prefixExists: boolean;
   dxvkVersion: string | null;
   battlenetInstalled: boolean;

@@ -35,8 +35,14 @@ pub fn log(app: &AppHandle, task: &str, line: impl Into<String>) {
 }
 
 fn resolve_proton(cfg: &Config) -> Result<ProtonBuild, String> {
-    proton::resolve(cfg.proton_path.as_deref())
-        .ok_or_else(|| "No se encontró ninguna versión de Proton. Descarga GE-Proton en Ajustes o elige Wine.".into())
+    let build = proton::resolve(cfg.proton_path.as_deref())
+        .ok_or("No se encontró ninguna versión de Proton. Descarga GE-Proton en Ajustes o elige Wine.")?;
+    // Outside its runtime Proton needs Steam's 32-bit host libraries, and
+    // fails cryptically without them (`/lib/ld-linux.so.2: could not open`).
+    match &build.missing_runtime {
+        Some(rt) => Err(format!("{} necesita {rt}, que no está instalado. Descárgalo desde Ajustes.", build.name)),
+        None => Ok(build),
+    }
 }
 
 /// A command that runs a Windows program in the configured prefix; append the
@@ -99,13 +105,13 @@ pub fn tool_command(cfg: &Config) -> Result<Command, String> {
     Ok(cmd)
 }
 
-/// Human-readable runner name, and whether it can run Battle.net.
-pub async fn runner_info(cfg: &Config) -> (Option<String>, bool) {
+/// Human-readable runner name, whether it can run Battle.net, and if not, why.
+pub async fn runner_info(cfg: &Config) -> (Option<String>, bool, Option<String>) {
     match cfg.runner {
         Runner::Wine => {
             let version = version(cfg).await;
             let ok = version.is_some() && supports_win64(cfg);
-            (version, ok)
+            (version, ok, None)
         }
         Runner::Proton => match resolve_proton(cfg) {
             Ok(b) => {
@@ -113,9 +119,9 @@ pub async fn runner_info(cfg: &Config) -> (Option<String>, bool) {
                     Some(v) => format!("{} ({v})", b.name),
                     None => b.name,
                 };
-                (Some(label), true)
+                (Some(label), true, None)
             }
-            Err(_) => (None, false),
+            Err(e) => (None, false, Some(e)),
         },
     }
 }
@@ -190,9 +196,9 @@ pub fn prefix_exists(cfg: &Config) -> bool {
 
 /// Creates the configured prefix, logging under `task`.
 pub async fn create_prefix(app: &AppHandle, cfg: &Config, task: &str) -> Result<(), String> {
-    let (_, runner_ok) = runner_info(cfg).await;
+    let (_, runner_ok, problem) = runner_info(cfg).await;
     if !runner_ok {
-        return Err("El runner no está listo: revisa Wine/Proton en Ajustes".into());
+        return Err(problem.unwrap_or_else(|| "El runner no está listo: revisa Wine/Proton en Ajustes".into()));
     }
     let prefix = cfg.wine_prefix();
     log(app, task, format!("Creando prefijo en {}", prefix.display()));

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatBytes, type Progress, type Status } from "../api";
+import { formatBytes, GE_PROTON_TASK, type Progress, type Status } from "../api";
 import { CheckIcon } from "../icons";
 
 interface Props {
@@ -10,6 +10,8 @@ interface Props {
   onInstallDxvk: () => void;
   onInstallBattlenet: () => void;
   onOpenSettings: () => void;
+  /** Downloads GE-Proton and the runtime it needs. */
+  onInstallGeProton: () => void;
 }
 
 interface StepProps {
@@ -69,7 +71,10 @@ export function Setup(props: Props) {
             isProton
               ? wineOk
                 ? `Usando ${status.runnerLabel}. Puedes elegir otra versión en Ajustes.`
-                : "No se encontró Proton en tus bibliotecas de Steam. Instálalo desde Steam o cambia a Wine en Ajustes."
+                : busy.has(GE_PROTON_TASK)
+                  ? "Descargando GE-Proton y el Steam Linux Runtime en el que se ejecuta. Puede tardar unos minutos."
+                  : <>{status.runnerProblem ?? "No se encontró Proton."} No necesitas Steam: Runux
+                      descarga GE-Proton y lo que necesita (unos 800 MB en total).</>
               : wineOk ? `Detectado: ${status.runnerLabel} (64 bits)`
               : status.runnerLabel
                 ? <>Detectado {status.runnerLabel}, pero sin soporte de 64 bits, que Battle.net necesita.
@@ -77,6 +82,14 @@ export function Setup(props: Props) {
                 : <>No se encuentra wine. Instálalo (<code>sudo apt install wine wine64</code>) o indica su ruta en Ajustes.</>
           }
         >
+          {isProton && !wineOk && (
+            <>
+              <button className="play-btn small" disabled={busy.has(GE_PROTON_TASK)} onClick={props.onInstallGeProton}>
+                {busy.has(GE_PROTON_TASK) ? "Descargando…" : "Descargar GE-Proton"}
+              </button>
+              {busy.has(GE_PROTON_TASK) && <ProgressBar p={progress[GE_PROTON_TASK]} />}
+            </>
+          )}
           <button className="ghost-btn" onClick={props.onOpenSettings}>Ajustes</button>
         </Step>
 
