@@ -41,6 +41,7 @@ def main() -> None:
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     (out / "index.html").write_text(page)
+    shutil.copy(Path(__file__).parent.parent / "src-tauri/icons/runux.svg", out / "runux.svg")
 
 
 if __name__ == "__main__":

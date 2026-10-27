@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Runux instala Battle.net y la EA app en Linux con Proton o Wine, sin necesidad de Steam.">
 <title>Descargar Runux</title>
+<link rel="icon" href="runux.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -66,10 +67,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.875em; }
 }
 .band .wrap { padding-block: 1.5rem 3.5rem; display: grid; gap: 3rem; }
 .brand { display: flex; align-items: center; gap: 0.75rem; font: 700 1.125rem var(--font-display); }
-.mark {
-  display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.5rem;
-  background: var(--garnet-ink); color: var(--garnet); font: 700 1.125rem var(--font-display);
-}
+.mark { width: 2.5rem; height: 2.5rem; flex: none; filter: drop-shadow(0 0.25rem 0.5rem rgb(0 0 0 / 0.3)); }
 .version {
   margin-left: auto; font: 600 0.8125rem var(--font-mono); letter-spacing: 0.02em;
   padding: 0.25rem 0.6rem; border-radius: 999px;
@@ -151,7 +149,7 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
 <header class="band">
   <div class="wrap">
     <div class="brand">
-      <span class="mark" aria-hidden="true">R</span>
+      <img class="mark" src="runux.svg" alt="" width="40" height="40">
       Runux
       <span class="version">v@VERSION@</span>
     </div>
