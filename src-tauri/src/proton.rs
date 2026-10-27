@@ -317,6 +317,25 @@ pub async fn install_ge(app: &AppHandle) -> Result<GeInstall, String> {
     Ok(GeInstall { version: release.tag_name, updated, runtime })
 }
 
+/// Deletes a GE-Proton build downloaded by the app (see [`install_ge`]), as
+/// long as it isn't the one chosen in the settings or in use.
+pub fn remove_downloaded(cfg: &crate::config::Config, path: &Path) -> Result<(), String> {
+    let build = discover()
+        .into_iter()
+        .find(|b| b.path == path && b.downloaded)
+        .ok_or("Solo se pueden borrar las versiones que ha descargado Runux")?;
+    if cfg.proton_path.as_deref() == Some(path) {
+        return Err(format!("{} es la versión elegida en Ajustes: elige otra antes de borrarla", build.name));
+    }
+    // With the separator, so GE-Proton10-2 doesn't match GE-Proton10-25.
+    if wine::any_process_mentions(&format!("{}/", wine::normalize_win_path(&path.to_string_lossy()))) {
+        return Err(format!("Hay programas usando {}: ciérralos antes de borrarla", build.name));
+    }
+    let result = std::fs::remove_dir_all(path).map_err(|e| format!("{}: {e}", path.display()));
+    forget_scan();
+    result
+}
+
 /// Libraries of the first Steam install, to find runtimes Steam already has.
 fn steam_libs() -> Vec<PathBuf> {
     default_root(&steam_roots()).0

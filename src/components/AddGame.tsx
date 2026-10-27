@@ -6,6 +6,8 @@ import { ProgressBar } from "./Setup";
 
 interface Props {
   scummvmInstalled: boolean;
+  /** The command that installs ScummVM on this distribution, if known. */
+  scummvmHint: string | null;
   busy: boolean;
   /** An installer launched from a disc is running. */
   installing: boolean;
@@ -41,7 +43,7 @@ function Steps({ current }: { current: number }) {
   );
 }
 
-export function AddGame({ scummvmInstalled, busy, installing, progress, onAdd, onInstall, onClose }: Props) {
+export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progress, onAdd, onInstall, onClose }: Props) {
   const [kind, setKind] = useState<ExternalKind>("scummvm");
   const [winSource, setWinSource] = useState<WindowsSource>("exe");
   const [name, setName] = useState("");
@@ -193,7 +195,10 @@ export function AddGame({ scummvmInstalled, busy, installing, progress, onAdd, o
     body = (
       <>
         {!scummvmInstalled && (
-          <p className="note">ScummVM no está instalado. Instálalo con <code>sudo apt install scummvm</code>.</p>
+          <p className="note">
+            ScummVM no está instalado.{" "}
+            {scummvmHint ? <>Instálalo con <code>{scummvmHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
+          </p>
         )}
         <label>
           Archivos del juego

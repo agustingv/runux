@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errorMessage, events, type EaGame, type ExternalGame, type Game, type LogLine, type Progress, type Status } from "./api";
+import { api, errorMessage, events, type Task, type EaGame, type ExternalGame, type Game, type LogLine, type Progress, type Status } from "./api";
 import { eaKey, externalKey } from "./components/Sidebar";
 
 const POLL_MS = 3000;
@@ -31,6 +31,9 @@ export function useLauncher({ onTaskError }: { onTaskError: () => void }) {
       return next;
     });
   }, []);
+
+  /** Tasks the user cancelled, whose failure isn't an error to show. */
+  const cancelled = useRef(new Set<string>());
 
   // One refresh at a time: asking while one runs queues another after it,
   // so slow ones don't pile up and the latest change is always picked up.
@@ -104,8 +107,10 @@ export function useLauncher({ onTaskError }: { onTaskError: () => void }) {
     try {
       return await fn();
     } catch (e) {
-      setError(errorMessage(e));
-      onTaskError();
+      if (!cancelled.current.delete(task)) {
+        setError(errorMessage(e));
+        onTaskError();
+      }
     } finally {
       markBusy(task, false);
       refresh();
@@ -131,6 +136,12 @@ export function useLauncher({ onTaskError }: { onTaskError: () => void }) {
     startTask(key, launch);
   };
 
+  /** Stops a task's download; the task then ends quietly. */
+  const cancel = (task: Task) => {
+    cancelled.current.add(task);
+    api.cancelDownload(task).catch((e) => setError(errorMessage(e)));
+  };
+
   const clearProgress = (task: string) =>
     setProgress((prev) => {
       const { [task]: _, ...rest } = prev;
@@ -142,6 +153,6 @@ export function useLauncher({ onTaskError }: { onTaskError: () => void }) {
 
   return {
     status, games, external, eaGames, busy, launching, progress, logs, error,
-    setError, clearLogs: () => setLogs([]), refresh, runTask, startTask, play, clearProgress, guard,
+    setError, clearLogs: () => setLogs([]), refresh, runTask, startTask, play, cancel, clearProgress, guard,
   };
 }

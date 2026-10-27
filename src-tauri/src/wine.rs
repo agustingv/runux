@@ -280,6 +280,12 @@ fn processes() -> Vec<(u32, String)> {
         .collect()
 }
 
+/// Whether any process, launchers included, has `needle` (normalized like
+/// `running_cmdlines`) in its command line.
+pub fn any_process_mentions(needle: &str) -> bool {
+    processes().iter().any(|(_, c)| c.contains(needle))
+}
+
 /// Runner processes that only wait for a program: `proton run` with its
 /// container, and Proton's `steam.exe`. They stay alive while anything else
 /// runs in the prefix, so they don't tell whether that program still runs.

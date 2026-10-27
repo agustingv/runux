@@ -1,7 +1,9 @@
 use crate::config;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
@@ -59,13 +61,30 @@ pub async fn fetch_text(url: &str) -> Result<String, String> {
     get(url).await?.text().await.map_err(|e| format!("Error descargando {url}: {e}"))
 }
 
+/// Tasks whose download the user cancelled, checked between chunks.
+static CANCELLED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Stops the download running for `task`, which then fails.
+pub fn cancel(task: &str) {
+    CANCELLED.lock().unwrap_or_else(|e| e.into_inner()).insert(task.to_string());
+}
+
+fn take_cancelled(task: &str) -> bool {
+    CANCELLED.lock().unwrap_or_else(|e| e.into_inner()).remove(task)
+}
+
 /// Streams `url` into `out`, emitting `progress` events along the way.
 async fn fetch_into<W: AsyncWrite + Unpin>(app: &AppHandle, task: &str, url: &str, out: &mut W) -> Result<(), String> {
+    // A cancel that came after the last download ended isn't for this one.
+    take_cancelled(task);
     let resp = get(url).await?;
     let total = resp.content_length();
     let mut stream = resp.bytes_stream();
     let (mut downloaded, mut last_emit) = (0u64, 0u64);
     while let Some(chunk) = stream.next().await {
+        if take_cancelled(task) {
+            return Err("Descarga cancelada".into());
+        }
         let chunk = chunk.map_err(|e| format!("Error descargando {url}: {e}"))?;
         out.write_all(&chunk).await.map_err(|e| e.to_string())?;
         downloaded += chunk.len() as u64;
@@ -96,5 +115,10 @@ pub async fn fetch_to_cache(app: &AppHandle, task: &str, url: &str, file: &str) 
 
 async fn fetch_to_file(app: &AppHandle, task: &str, url: &str, dest: &Path) -> Result<(), String> {
     let mut file = tokio::fs::File::create(dest).await.map_err(|e| format!("{}: {e}", dest.display()))?;
-    fetch_into(app, task, url, &mut file).await
+    let result = fetch_into(app, task, url, &mut file).await;
+    if result.is_err() {
+        // Never leave half a file behind to be mistaken for a whole one.
+        let _ = tokio::fs::remove_file(dest).await;
+    }
+    result
 }

@@ -21,7 +21,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const {
     status, games, external, eaGames, busy, launching, progress, logs, error,
-    setError, clearLogs, refresh, runTask, startTask, play, clearProgress, guard,
+    setError, clearLogs, refresh, runTask, startTask, play, cancel, clearProgress, guard,
   } = useLauncher({ onTaskError: () => setShowConsole(true) });
 
   useEffect(() => {
@@ -180,6 +180,7 @@ export default function App() {
               onInstallEa={installEa}
               onOpenSettings={() => setShowSettings(true)}
               onInstallGeProton={() => runTask(TASK.geProton, api.installGeProton)}
+              onCancelGeProton={() => cancel(TASK.geProton)}
             />
           ) : game ? (
             <GameView
@@ -229,6 +230,7 @@ export default function App() {
       {showAddGame && status && (
         <AddGame
           scummvmInstalled={status.scummvmInstalled}
+          scummvmHint={status.installHints.scummvm}
           busy={busy.has(TASK.import)}
           installing={busy.has(TASK.discInstall)}
           progress={progress[TASK.import]}
@@ -247,6 +249,7 @@ export default function App() {
           onOpenEaPrefix={guard(api.openEaPrefix)}
           onStopWine={guard(api.stopWine)}
           onInstallGeProton={() => runTask(TASK.geProton, api.installGeProton)}
+          onCancelGeProton={() => cancel(TASK.geProton)}
           installingGeProton={busy.has(TASK.geProton)}
           geProtonProgress={progress[TASK.geProton]}
         />

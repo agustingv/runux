@@ -3,7 +3,7 @@
 
 use crate::config::{self, Config};
 use crate::task::Task;
-use crate::{store, wine};
+use crate::{host, store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -131,7 +131,10 @@ pub fn scummvm_bin() -> Option<PathBuf> {
 }
 
 fn scummvm() -> Result<PathBuf, String> {
-    scummvm_bin().ok_or_else(|| "ScummVM no está instalado (sudo apt install scummvm)".into())
+    scummvm_bin().ok_or_else(|| match host::install_hints().scummvm {
+        Some(command) => format!("ScummVM no está instalado ({command})"),
+        None => "ScummVM no está instalado".into(),
+    })
 }
 
 pub(crate) fn slug(name: &str) -> String {

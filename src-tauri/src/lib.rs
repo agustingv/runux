@@ -55,6 +55,7 @@ struct Status {
     ea_overlay: Option<bool>,
     /// Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing.
     missing_32bit: Option<host::Missing32Bit>,
+    install_hints: host::InstallHints,
 }
 
 #[tauri::command]
@@ -108,6 +109,7 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
         ea_running: ea::running(cmdlines),
         ea_overlay: ea::overlay_enabled(&cfg.ea()),
         missing_32bit: host::missing_32bit_graphics(),
+        install_hints: host::install_hints(),
     }
 }
 
@@ -254,6 +256,17 @@ async fn install_ge_proton(app: AppHandle) -> Result<proton::GeInstall, String> 
     let result = proton::install_ge(&app).await;
     proton::forget_scan();
     result
+}
+
+#[tauri::command]
+fn remove_proton(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    proton::remove_downloaded(&state.config(), Path::new(&path))
+}
+
+/// Stops the download of a task, such as GE-Proton's.
+#[tauri::command]
+fn cancel_download(task: String) {
+    download::cancel(&task);
 }
 
 /// Data URL of the icon in a game's executable. `key` is the game's key in
@@ -445,6 +458,8 @@ pub fn run() {
             open_game_logs,
             list_protons,
             install_ge_proton,
+            remove_proton,
+            cancel_download,
             add_external_game,
             remove_external_game,
             launch_external_game,

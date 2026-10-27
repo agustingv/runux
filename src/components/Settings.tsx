@@ -1,5 +1,6 @@
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
-import { api, type Config, type GeInstall, type Progress, type ProtonBuild, type Runner } from "../api";
+import { api, errorMessage, type Config, type GeInstall, type Progress, type ProtonBuild, type Runner } from "../api";
 import { CloseIcon } from "../icons";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   onStopWine: () => void;
   /** Downloads the latest GE-Proton; resolves when done, with `undefined` if it failed. */
   onInstallGeProton: () => Promise<GeInstall | undefined>;
+  onCancelGeProton: () => void;
   installingGeProton: boolean;
   geProtonProgress?: Progress;
 }
@@ -19,7 +21,7 @@ const AUTO = "";
 
 export function Settings({
   config, onSave, onClose, onOpenPrefix, onOpenEaPrefix, onStopWine,
-  onInstallGeProton, installingGeProton, geProtonProgress,
+  onInstallGeProton, onCancelGeProton, installingGeProton, geProtonProgress,
 }: Props) {
   const [draft, setDraft] = useState(config);
   const [protons, setProtons] = useState<ProtonBuild[] | null>(null);
@@ -46,13 +48,34 @@ export function Settings({
     : null;
 
   const runnerChanged = draft.runner !== config.runner;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(config);
+
+  /** Closes, asking first if that would throw away changes. */
+  const close = async () => {
+    if (!dirty || (await ask("¿Descartar los cambios en los ajustes?", { title: "Ajustes", kind: "warning" }))) onClose();
+  };
+
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const downloaded = protons?.filter((p) => p.downloaded) ?? [];
+
+  const removeProton = async (p: ProtonBuild) => {
+    setRemoveError(null);
+    if (!(await ask(`¿Borrar ${p.name}? Ocupa unos 600 MB.`, { title: "Borrar GE-Proton", kind: "warning" }))) return;
+    try {
+      await api.removeProton(p.path);
+    } catch (e) {
+      setRemoveError(errorMessage(e));
+    }
+    loadProtons();
+  };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // A click outside only closes when there's nothing to lose.
+    <div className="modal-backdrop" onClick={dirty ? undefined : onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header>
           <h2>Ajustes</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Cerrar"><CloseIcon /></button>
+          <button className="icon-btn" onClick={close} aria-label="Cerrar"><CloseIcon /></button>
         </header>
 
         <div className="segmented" role="radiogroup" aria-label="Runner">
@@ -93,12 +116,15 @@ export function Settings({
               </small>
             </label>
             <div className="ge-proton">
-              <button className="ghost-btn" onClick={installGeProton} disabled={installingGeProton}>
-                {installingGeProton
-                  ? pct === null ? "Preparando la descarga…" : `Descargando… ${pct}%`
-                  : downloadedGe?.missingRuntime ? `Descargar ${downloadedGe.missingRuntime}`
-                  : downloadedGe ? "Buscar actualización de GE-Proton" : "Descargar GE-Proton"}
-              </button>
+              <div className="modal-row">
+                <button className="ghost-btn" onClick={installGeProton} disabled={installingGeProton}>
+                  {installingGeProton
+                    ? pct === null ? "Preparando la descarga…" : `Descargando… ${pct}%`
+                    : downloadedGe?.missingRuntime ? `Descargar ${downloadedGe.missingRuntime}`
+                    : downloadedGe ? "Buscar actualización de GE-Proton" : "Descargar GE-Proton"}
+                </button>
+                {installingGeProton && <button className="link-btn" onClick={onCancelGeProton}>Cancelar</button>}
+              </div>
               <small className="muted">
                 {geResult && !installingGeProton
                   ? geResult.runtime
@@ -112,6 +138,21 @@ export function Settings({
                     ? <>Descargado: <b>{downloadedGe.name}</b>. Si sale una versión nueva, se descarga junto a la que tienes.</>
                     : "La última versión, desde GitHub (unos 600 MB), y el Steam Linux Runtime que necesita si no tienes Steam (unos 175 MB). Elígela arriba o déjalo en Automático."}
               </small>
+              {downloaded.length > 1 && (
+                <ul className="disc-list">
+                  {downloaded.map((p) => (
+                    <li key={p.path}>
+                      <span className="disc-name mono" title={p.path}>{p.name}</span>
+                      {config.protonPath === p.path ? (
+                        <small className="muted">elegida</small>
+                      ) : (
+                        <button className="link-btn" onClick={() => removeProton(p)} disabled={installingGeProton}>Borrar</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {removeError && <p className="note">{removeError}</p>}
             </div>
             <label>
               Datos de Proton
@@ -157,7 +198,7 @@ export function Settings({
         </div>
 
         <footer>
-          <button className="ghost-btn" onClick={onClose}>Cancelar</button>
+          <button className="ghost-btn" onClick={close}>Cancelar</button>
           <button className="play-btn small" onClick={() => onSave(draft)}>Guardar</button>
         </footer>
       </div>

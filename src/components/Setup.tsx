@@ -14,6 +14,7 @@ interface Props {
   onOpenSettings: () => void;
   /** Downloads GE-Proton and the runtime it needs. */
   onInstallGeProton: () => void;
+  onCancelGeProton: () => void;
 }
 
 interface StepProps {
@@ -55,6 +56,7 @@ export function Setup(props: Props) {
   const { status, busy, progress } = props;
   const wineOk = status.runnerOk;
   const isProton = status.runner === "proton";
+  const wineHint = status.installHints.wine && <> (<code>{status.installHints.wine}</code>)</>;
 
   return (
     <div className="setup">
@@ -81,8 +83,8 @@ export function Setup(props: Props) {
               : wineOk ? `Detectado: ${status.runnerLabel} (64 bits)`
               : status.runnerLabel
                 ? <>Detectado {status.runnerLabel}, pero sin soporte de 64 bits, que Battle.net necesita.
-                    Instala <code>wine64</code> (<code>sudo apt install wine64</code>) o indica otro Wine en Ajustes.</>
-                : <>No se encuentra wine. Instálalo (<code>sudo apt install wine wine64</code>) o indica su ruta en Ajustes.</>
+                    Instala su parte de 64 bits{wineHint} o indica otro Wine en Ajustes.</>
+                : <>No se encuentra wine. Instálalo{wineHint} o indica su ruta en Ajustes.</>
           }
         >
           {isProton && !wineOk && (
@@ -90,7 +92,12 @@ export function Setup(props: Props) {
               <button className="play-btn small" disabled={busy.has(TASK.geProton)} onClick={props.onInstallGeProton}>
                 {busy.has(TASK.geProton) ? "Descargando…" : "Descargar GE-Proton"}
               </button>
-              {busy.has(TASK.geProton) && <ProgressBar p={progress[TASK.geProton]} />}
+              {busy.has(TASK.geProton) && (
+                <>
+                  <ProgressBar p={progress[TASK.geProton]} />
+                  <button className="link-btn" onClick={props.onCancelGeProton}>Cancelar</button>
+                </>
+              )}
             </>
           )}
           <button className="ghost-btn" onClick={props.onOpenSettings}>Ajustes</button>

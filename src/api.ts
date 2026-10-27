@@ -84,6 +84,9 @@ export const api = {
   openGameLogs: (key: string) => invoke<void>("open_game_logs", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),
   installGeProton: () => invoke<GeInstall>("install_ge_proton"),
+  /** Deletes a GE-Proton build downloaded by the app. */
+  removeProton: (path: string) => invoke<void>("remove_proton", { path }),
+  cancelDownload: (task: Task) => invoke<void>("cancel_download", { task }),
   addExternalGame: (request: AddGameRequest) => invoke<ExternalGameEntry>("add_external_game", { request }),
   removeExternalGame: (id: string) => invoke<void>("remove_external_game", { id }),
   launchExternalGame: (id: string) => invoke<void>("launch_external_game", { id }),
