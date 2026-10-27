@@ -3,6 +3,7 @@ mod disc;
 mod download;
 mod dxvk;
 mod ea;
+mod exeicon;
 mod external;
 mod games;
 mod host;
@@ -222,7 +223,10 @@ fn open_ea_prefix(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn list_games(state: State<'_, AppState>) -> Result<Vec<Game>, String> {
-    let cfg = state.config();
+    battlenet_games(&state.config())
+}
+
+fn battlenet_games(cfg: &Config) -> Result<Vec<Game>, String> {
     let Some(db) = productdb::read(&wine::product_db(&cfg))? else {
         return Ok(Vec::new());
     };
@@ -230,7 +234,7 @@ fn list_games(state: State<'_, AppState>) -> Result<Vec<Game>, String> {
     let mut games: Vec<Game> = db
         .product_installs
         .iter()
-        .filter_map(|p| games::from_install(&cfg, p, &cmdlines))
+        .filter_map(|p| games::from_install(cfg, p, &cmdlines))
         .collect();
     games.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(games)
@@ -301,6 +305,29 @@ fn list_protons() -> Vec<proton::ProtonBuild> {
 #[tauri::command]
 async fn install_ge_proton(app: AppHandle) -> Result<proton::GeInstall, String> {
     proton::install_ge(&app).await
+}
+
+/// Data URL of the icon in a game's executable. `key` is the game's key in
+/// the sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
+#[tauri::command]
+async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
+    use base64::Engine;
+    let cfg = state.config();
+    tokio::task::spawn_blocking(move || {
+        let exe = if let Some(id) = key.strip_prefix("ea:") {
+            ea::find_game(&cfg.ea(), id).ok()?.exe?
+        } else if let Some(id) = key.strip_prefix("ext:") {
+            external::find(id).ok()?.exe?
+        } else {
+            // Battle.net doesn't say which executable is the game's.
+            let game = battlenet_games(&cfg).ok()?.into_iter().find(|g| g.uid == key)?;
+            disc::guess_exe(Path::new(&game.local_path))?
+        };
+        let icon = exeicon::read(&exe)?;
+        Some(format!("data:{};base64,{}", icon.mime, base64::engine::general_purpose::STANDARD.encode(icon.data)))
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -464,6 +491,7 @@ pub fn run() {
             stop_wine,
             open_prefix,
             open_game_folder,
+            game_icon,
             list_protons,
             install_ge_proton,
             list_external_games,

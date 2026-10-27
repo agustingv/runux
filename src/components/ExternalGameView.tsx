@@ -1,8 +1,10 @@
 import type { CSSProperties } from "react";
-import { initials, type ExternalGame, type Runner } from "../api";
+import { type ExternalGame, type Runner } from "../api";
 import { EnvEditor } from "./EnvEditor";
 import { Troubleshooting } from "./Troubleshooting";
 import { FolderIcon, PlayIcon } from "../icons";
+import { GameIcon } from "./GameIcon";
+import { externalKey } from "./Sidebar";
 
 interface Props {
   game: ExternalGame;
@@ -20,7 +22,7 @@ export function ExternalGameView({ game, runner, launching, onPlay, onOpenFolder
   return (
     <div className="game-view">
       <header className="banner" style={{ "--accent": game.accent } as CSSProperties}>
-        <div className="banner-mark">{initials(game.name)}</div>
+        <GameIcon gameKey={externalKey(game.id)} name={game.name} ready={game.kind === "windows"} className="banner-mark" />
         <h1>{game.name}</h1>
       </header>
 

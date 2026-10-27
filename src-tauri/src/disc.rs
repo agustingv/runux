@@ -483,6 +483,27 @@ pub(crate) fn game_rank(path: &Path) -> (bool, bool, std::cmp::Reverse<u64>) {
     (helper, !named_like_folder, std::cmp::Reverse(size))
 }
 
+/// The likeliest game among the `.exe` files in a game's folder, outside
+/// an EA game's own installer.
+pub(crate) fn guess_exe(dir: &Path) -> Option<PathBuf> {
+    fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = e.path();
+            let Ok(kind) = e.file_type() else {
+                continue;
+            };
+            if kind.is_dir() && depth > 0 && !e.file_name().eq_ignore_ascii_case("__Installer") {
+                walk(&path, depth - 1, out);
+            } else if kind.is_file() && path.extension().is_some_and(|x| x.eq_ignore_ascii_case("exe")) {
+                out.push(path);
+            }
+        }
+    }
+    let mut exes = Vec::new();
+    walk(dir, 4, &mut exes);
+    exes.into_iter().min_by_key(|p| game_rank(p))
+}
+
 fn installed(cfg: &Config, session: &Session) -> Vec<PathBuf> {
     let mut new: Vec<PathBuf> = exes_in(&cfg.wine_prefix().join("drive_c"))
         .into_iter()

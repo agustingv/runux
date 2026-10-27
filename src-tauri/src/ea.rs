@@ -200,32 +200,12 @@ fn manifest_exe(xml: &str) -> Option<String> {
     Some(rel.trim_start_matches(['\\', '/']).to_string())
 }
 
-/// Every `.exe` in the game's folder, outside its own installer.
-fn guess_exe(dir: &Path) -> Option<PathBuf> {
-    fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
-        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-            let path = e.path();
-            let Ok(kind) = e.file_type() else {
-                continue;
-            };
-            if kind.is_dir() && depth > 0 && !e.file_name().eq_ignore_ascii_case("__Installer") {
-                walk(&path, depth - 1, out);
-            } else if kind.is_file() && path.extension().is_some_and(|x| x.eq_ignore_ascii_case("exe")) {
-                out.push(path);
-            }
-        }
-    }
-    let mut exes = Vec::new();
-    walk(dir, 4, &mut exes);
-    exes.into_iter().min_by_key(|p| disc::game_rank(p))
-}
-
 fn game_at(cfg: &Config, dir: &Path, cmdlines: &[String]) -> Option<EaGame> {
     let xml = decode(&std::fs::read(disc::find_ci(dir, r"__Installer\installerdata.xml")?).ok()?);
     let folder = dir.file_name()?.to_string_lossy().into_owned();
     let exe = manifest_exe(&xml)
         .and_then(|rel| disc::find_ci(dir, &rel))
-        .or_else(|| guess_exe(dir));
+        .or_else(|| disc::guess_exe(dir));
     let inside = format!("{}/", wine::to_win_path(cfg, dir));
     Some(EaGame {
         id: external::slug(&folder),

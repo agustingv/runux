@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
-import { initials, type Game } from "../api";
+import { type Game } from "../api";
 import { FolderIcon, PlayIcon } from "../icons";
+import { GameIcon } from "./GameIcon";
 
 interface Props {
   game: Game;
@@ -33,7 +34,7 @@ export function GameView({ game, launching, battlenetRunning, onPlay, onOpenBatt
         className="banner"
         style={{ "--accent": game.accent } as CSSProperties}
       >
-        <div className="banner-mark">{initials(game.name)}</div>
+        <GameIcon gameKey={game.uid} name={game.name} ready={game.installed} className="banner-mark" />
         <h1>{game.name}</h1>
       </header>
 

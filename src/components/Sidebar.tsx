@@ -1,5 +1,6 @@
-import { initials, type EaGame, type ExternalGame, type Game } from "../api";
+import type { EaGame, ExternalGame, Game } from "../api";
 import { HomeIcon, PlusIcon } from "../icons";
+import { GameIcon } from "./GameIcon";
 
 interface Props {
   games: Game[];
@@ -36,7 +37,7 @@ export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGam
           onClick={() => onSelect(g.uid)}
           title={g.name}
         >
-          <span className="side-icon" style={{ background: g.accent }}>{initials(g.name)}</span>
+          <GameIcon gameKey={g.uid} name={g.name} ready={g.installed} className="side-icon" style={{ background: g.accent }} />
           <span className="side-label">{g.name}</span>
           {g.running && <span className="dot running" title="En ejecución" />}
           {!g.running && g.updateProgress !== null && <span className="dot updating" title="Actualizando" />}
@@ -51,7 +52,7 @@ export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGam
           onClick={() => onSelect(eaKey(g.id))}
           title={g.name}
         >
-          <span className="side-icon" style={{ background: g.accent }}>{initials(g.name)}</span>
+          <GameIcon gameKey={eaKey(g.id)} name={g.name} ready className="side-icon" style={{ background: g.accent }} />
           <span className="side-label">{g.name}</span>
           {g.running && <span className="dot running" title="En ejecución" />}
         </button>
@@ -65,7 +66,7 @@ export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGam
           onClick={() => onSelect(externalKey(g.id))}
           title={g.name}
         >
-          <span className="side-icon" style={{ background: g.accent }}>{initials(g.name)}</span>
+          <GameIcon gameKey={externalKey(g.id)} name={g.name} ready={g.kind === "windows"} className="side-icon" style={{ background: g.accent }} />
           <span className="side-label">{g.name}</span>
           {g.running && <span className="dot running" title="En ejecución" />}
         </button>

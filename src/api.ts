@@ -191,6 +191,8 @@ export const api = {
   stopWine: () => invoke<void>("stop_wine"),
   openPrefix: () => invoke<void>("open_prefix"),
   openGameFolder: (uid: string) => invoke<void>("open_game_folder", { uid }),
+  /** Data URL of the icon in a game's executable, by its key in the sidebar. */
+  gameIcon: (key: string) => invoke<string | null>("game_icon", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),
   installGeProton: () => invoke<GeInstall>("install_ge_proton"),
   listExternalGames: () => invoke<ExternalGame[]>("list_external_games"),

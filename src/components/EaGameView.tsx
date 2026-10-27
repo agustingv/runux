@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
-import { initials, type EaGame, type Runner } from "../api";
+import { type EaGame, type Runner } from "../api";
 import { FolderIcon, PlayIcon } from "../icons";
+import { GameIcon } from "./GameIcon";
+import { eaKey } from "./Sidebar";
 import { EnvEditor } from "./EnvEditor";
 import { Troubleshooting } from "./Troubleshooting";
 
@@ -25,7 +27,7 @@ export function EaGameView({ game, runner, launching, eaRunning, eaOverlay, onSe
   return (
     <div className="game-view">
       <header className="banner" style={{ "--accent": game.accent } as CSSProperties}>
-        <div className="banner-mark">{initials(game.name)}</div>
+        <GameIcon gameKey={eaKey(game.id)} name={game.name} ready className="banner-mark" />
         <h1>{game.name}</h1>
       </header>
 
