@@ -14,9 +14,19 @@ export function Missing32Bit({ missing }: { missing: NonNullable<Status["missing
   return (
     <div className="note missing-32bit">
       <p>
-        <b>Faltan los controladores gráficos de 32 bits.</b> Battle.net, la EA app y muchos juegos son programas de
-        32 bits y se cerrarán al abrirse sin ellos.{" "}
-        {missing.command ? "Instálalos con:" : "Instala la versión de 32 bits de Mesa (o del controlador de NVIDIA) con el gestor de paquetes de tu distribución."}
+        {missing.nvidia ? (
+          <>
+            <b>Falta la parte de 32 bits del controlador de NVIDIA.</b> Battle.net, la EA app, Ubisoft Connect y muchos
+            juegos son programas de 32 bits y, sin ella, se cerrarán o se quedarán colgados al abrirse.{" "}
+            {missing.command ? "Instálala con:" : "Instala la versión de 32 bits del controlador de NVIDIA con el gestor de paquetes de tu distribución."}
+          </>
+        ) : (
+          <>
+            <b>Faltan los controladores gráficos de 32 bits.</b> Battle.net, la EA app y muchos juegos son programas de
+            32 bits y se cerrarán al abrirse sin ellos.{" "}
+            {missing.command ? "Instálalos con:" : "Instala la versión de 32 bits de Mesa con el gestor de paquetes de tu distribución."}
+          </>
+        )}
       </p>
       {missing.command && (
         <div className="missing-32bit-cmd">

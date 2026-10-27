@@ -7,6 +7,10 @@
  */
 export type Missing32Bit = { 
 /**
+ * It's NVIDIA's driver that's missing, not Mesa's.
+ */
+nvidia: boolean, 
+/**
  * Commands that install them on this distribution, when known.
  */
 command: string | null, };

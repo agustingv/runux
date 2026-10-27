@@ -12,6 +12,8 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Missing32Bit {
+    /// It's NVIDIA's driver that's missing, not Mesa's.
+    pub nvidia: bool,
     /// Commands that install them on this distribution, when known.
     pub command: Option<String>,
 }
@@ -26,25 +28,53 @@ fn lib32_dirs() -> Vec<&'static Path> {
     dirs
 }
 
-/// A 32-bit Vulkan driver: Mesa's (`libvulkan_radeon.so`…) or NVIDIA's.
-fn has_32bit_vulkan_driver() -> bool {
-    lib32_dirs().iter().any(|dir| {
-        std::fs::read_dir(dir).is_ok_and(|entries| {
-            entries.flatten().any(|e| {
-                let name = e.file_name();
-                let name = name.to_string_lossy();
-                (name.starts_with("libvulkan_") && name.contains(".so")) || name.starts_with("libGLX_nvidia.so")
-            })
-        })
-    })
+/// The 32-bit Vulkan drivers installed.
+struct Drivers32 {
+    /// Mesa's: `libvulkan_radeon.so`, `libvulkan_intel.so`…
+    mesa: bool,
+    nvidia: bool,
+}
+
+fn installed_32bit_drivers() -> Drivers32 {
+    let mut found = Drivers32 { mesa: false, nvidia: false };
+    for entries in lib32_dirs().iter().filter_map(|dir| std::fs::read_dir(dir).ok()) {
+        for e in entries.flatten() {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            found.mesa |= name.starts_with("libvulkan_") && name.contains(".so");
+            found.nvidia |= name.starts_with("libGLX_nvidia.so");
+        }
+    }
+    found
+}
+
+/// The version of NVIDIA's proprietary driver (`595.99.02`), when it's loaded.
+fn nvidia_version() -> Option<String> {
+    let version = std::fs::read_to_string("/sys/module/nvidia/version").ok()?;
+    Some(version.trim().to_string()).filter(|v| !v.is_empty())
 }
 
 pub fn missing_32bit_graphics() -> Option<Missing32Bit> {
     let loader = Path::new("/lib/ld-linux.so.2").exists();
-    if loader && has_32bit_vulkan_driver() {
+    let installed = installed_32bit_drivers();
+    let nvidia = nvidia_version();
+    // With NVIDIA's driver loaded, games run on it: PRIME offload even hides
+    // the other drivers from Vulkan, so Mesa's alone doesn't help.
+    let ok = match nvidia {
+        Some(_) => installed.nvidia,
+        None => installed.mesa || installed.nvidia,
+    };
+    if loader && ok {
         return None;
     }
-    Some(Missing32Bit { command: Distro::current().map(Distro::install_32bit_graphics) })
+    let distro = Distro::current();
+    Some(match nvidia {
+        Some(version) => Missing32Bit {
+            nvidia: true,
+            command: distro.map(|d| d.install_32bit_nvidia(&version)),
+        },
+        None => Missing32Bit { nvidia: false, command: distro.map(Distro::install_32bit_graphics) },
+    })
 }
 
 /// Commands that install, on this distribution, programs Runux uses but
@@ -134,6 +164,25 @@ impl Distro {
             Distro::Suse => "sudo zypper install Mesa-32bit Mesa-dri-32bit libvulkan_radeon-32bit libvulkan_intel-32bit".into(),
         }
     }
+
+    /// How to install the 32-bit part of NVIDIA's driver `version`.
+    fn install_32bit_nvidia(self, version: &str) -> String {
+        match self {
+            Distro::Debian => {
+                // Ubuntu packages each branch apart (`libnvidia-gl-595`); Debian, as one.
+                let branch = version.split('.').next().unwrap_or(version);
+                let ubuntu = Path::new(&format!("/var/lib/dpkg/info/libnvidia-gl-{branch}:amd64.list")).exists();
+                let package = if ubuntu { format!("libnvidia-gl-{branch}:i386") } else { "nvidia-driver-libs:i386".into() };
+                format!("sudo dpkg --add-architecture i386\nsudo apt update\nsudo apt install {package}")
+            }
+            // From RPM Fusion, like the 64-bit one.
+            Distro::Fedora => "sudo dnf install xorg-x11-drv-nvidia-libs.i686".into(),
+            Distro::Arch => "# Activa el repositorio [multilib] en /etc/pacman.conf y después:\n\
+                 sudo pacman -Syu lib32-nvidia-utils"
+                .into(),
+            Distro::Suse => "sudo zypper install nvidia-gl-G06-32bit".into(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +197,8 @@ mod tests {
         assert_eq!(Distro::parse("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"), Some(Distro::Debian));
         let nobara = Distro::parse("ID=nobara\nID_LIKE=\"rhel centos fedora\"\n").unwrap();
         assert!(nobara.install_32bit_graphics().starts_with("sudo dnf"));
+        assert!(nobara.install_32bit_nvidia("595.99.02").contains("nvidia-libs.i686"));
+        assert!(debian.install_32bit_nvidia("595.99.02").ends_with(":i386"));
         assert_eq!(Distro::parse("ID=manjaro\nID_LIKE=arch\n"), Some(Distro::Arch));
         assert_eq!(Distro::parse("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"), Some(Distro::Suse));
         assert_eq!(Distro::parse("ID=gentoo\n"), None);
