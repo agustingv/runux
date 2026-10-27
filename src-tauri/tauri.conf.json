@@ -45,13 +45,21 @@
         "depends": [
           "udisks2",
           "python3"
-        ]
+        ],
+        "files": {
+          "/etc/apt/sources.list.d/runux.sources": "packaging/runux.sources",
+          "/usr/share/keyrings/runux.gpg": "packaging/runux.gpg"
+        }
       },
       "rpm": {
         "depends": [
           "udisks2",
           "python3"
-        ]
+        ],
+        "files": {
+          "/etc/yum.repos.d/runux.repo": "packaging/runux.repo",
+          "/etc/pki/rpm-gpg/RPM-GPG-KEY-runux": "packaging/RPM-GPG-KEY-runux"
+        }
       }
     }
   }

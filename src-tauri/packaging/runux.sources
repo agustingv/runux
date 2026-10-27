@@ -1,0 +1,7 @@
+# Updates for Runux, installed with its package.
+Types: deb
+URIs: https://agustingv.github.io/runux/apt
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/runux.gpg

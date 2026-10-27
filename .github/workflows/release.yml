@@ -106,6 +106,15 @@ jobs:
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" \
             public-site
 
+      - name: Build the APT and DNF repositories
+        env:
+          REPO_SIGNING_KEY: ${{ secrets.REPO_SIGNING_KEY }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils createrepo-c
+          echo "$REPO_SIGNING_KEY" | gpg --batch --import
+          site/repos.sh dist-packages/*.deb dist-packages/*.rpm public-site
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

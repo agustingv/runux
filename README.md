@@ -33,3 +33,17 @@ Las carpetas de la versión anterior (`btn`) se mueven solas al primer arranque 
 El flujo `.github/workflows/release.yml` compila el `.deb` y el `.rpm`, los publica en una
 GitHub Release y actualiza la página de descarga en GitHub Pages. La página es la plantilla
 `site/index.html`, que `site/render.py` rellena con la versión, los enlaces, tamaños y SHA-256.
+
+## Actualizaciones
+
+Los paquetes instalan un repositorio que se publica en GitHub Pages con cada versión, así
+que Runux se actualiza con el resto del sistema (`apt upgrade`, `dnf upgrade` o el
+actualizador gráfico):
+
+- APT: `/etc/apt/sources.list.d/runux.sources`, con la clave en `/usr/share/keyrings/runux.gpg`.
+- DNF: `/etc/yum.repos.d/runux.repo`, con la clave en `/etc/pki/rpm-gpg/RPM-GPG-KEY-runux`.
+
+Estos archivos están en `src-tauri/packaging/`. `site/repos.sh` crea los repositorios y
+los firma con la clave privada guardada en el secreto `REPO_SIGNING_KEY` del repositorio
+de GitHub (exportada con `gpg --export-secret-keys --armor`). Si cambias la clave, cambia
+también las públicas de `src-tauri/packaging/`.
