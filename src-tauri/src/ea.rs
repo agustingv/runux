@@ -54,11 +54,7 @@ pub async fn install(app: &AppHandle, cfg: &Config) -> Result<(), String> {
         wine::create_prefix(app, cfg, INSTALL_TASK).await?;
     }
     wine::log(app, INSTALL_TASK, "Descargando el instalador de la EA app…");
-    let setup = download::fetch(app, INSTALL_TASK, INSTALLER_URL).await?;
-    let cache = config::cache_dir();
-    std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-    let setup_path = cache.join("EAappInstaller.exe");
-    std::fs::write(&setup_path, setup).map_err(|e| e.to_string())?;
+    let setup_path = download::fetch_to_cache(app, INSTALL_TASK, INSTALLER_URL, "EAappInstaller.exe").await?;
 
     register_dotnet(app, cfg).await?;
     wine::log(app, INSTALL_TASK, "Ejecutando el instalador. Sigue los pasos en su ventana.");
@@ -79,11 +75,8 @@ const DOTNET_INSTALL_ROOTS: &[(&str, &str)] = &[
 async fn register_dotnet(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     for (view, root) in DOTNET_INSTALL_ROOTS {
         let mut cmd = wine::tool_command(cfg)?;
-        cmd.args(["reg", "add", r"HKLM\Software\Microsoft\.NETFramework", "/v", "InstallRoot", "/d", root, "/f", view])
-            .kill_on_drop(true);
-        tokio::time::timeout(std::time::Duration::from_secs(60), wine::run_logged(app, INSTALL_TASK, cmd))
-            .await
-            .map_err(|_| "Wine no respondió al preparar el prefijo de la EA app".to_string())??;
+        cmd.args(["reg", "add", r"HKLM\Software\Microsoft\.NETFramework", "/v", "InstallRoot", "/d", root, "/f", view]);
+        wine::run_tool(app, INSTALL_TASK, cmd, "preparar el prefijo de la EA app").await?;
     }
     Ok(())
 }
@@ -351,9 +344,7 @@ fn load_settings() -> BTreeMap<String, GameSettings> {
 static SETTINGS: Mutex<()> = Mutex::new(());
 
 pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<(), String> {
-    if let Some(bad) = env.keys().find(|k| !external::valid_env_name(k)) {
-        return Err(format!("Nombre de variable no válido: «{bad}»"));
-    }
+    external::check_env(&env)?;
     let _lock = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
     let mut settings = load_settings();
     if env.is_empty() {
@@ -377,8 +368,9 @@ fn needs_restart(client: Option<&BTreeMap<String, String>>, env: &BTreeMap<Strin
     }
 }
 
-pub fn find_game(cfg: &Config, id: &str) -> Result<EaGame, String> {
-    games(cfg, &[])
+/// The game `id`; `cmdlines` tell whether it is running, if that matters.
+pub fn find_game(cfg: &Config, id: &str, cmdlines: &[String]) -> Result<EaGame, String> {
+    games(cfg, cmdlines)
         .into_iter()
         .find(|g| g.id == id)
         .ok_or_else(|| format!("Juego de EA desconocido: {id}"))
@@ -392,9 +384,6 @@ pub fn find_game(cfg: &Config, id: &str) -> Result<EaGame, String> {
 pub async fn launch_game(app: &AppHandle, cfg: &Config, game: &EaGame) -> Result<(), String> {
     let task = format!("ea:{}", game.id);
     let mut cmd = wine::command(cfg)?;
-    for (k, v) in &game.env {
-        wine::log(app, &task, format!("{k}={v}"));
-    }
     match (game.content_ids.is_empty(), &game.exe) {
         (false, _) => {
             let dir = client_dir(cfg).ok_or("La EA app no está instalada")?;
@@ -419,10 +408,7 @@ pub async fn launch_game(app: &AppHandle, cfg: &Config, game: &EaGame) -> Result
         }
         (true, None) => return Err(format!("No se encuentra el ejecutable de {}", game.name)),
     }
-    cmd.env("PROTON_LOG_DIR", wine::game_log_dir(&task));
-    // Last, so they can override the runner's own (e.g. `WINEDEBUG`).
-    cmd.envs(&game.env);
-    wine::spawn_logged(app, &task, cmd);
+    wine::spawn_game(app, &task, cmd, &game.env);
     Ok(())
 }
 
@@ -443,12 +429,8 @@ async fn uninstaller(cfg: &Config, game: &EaGame) -> Result<(String, String), St
     let folder = game.path.file_name().unwrap_or_default().to_string_lossy().into_owned();
     for root in [r"HKLM\Software\Wow6432Node\Electronic Arts", r"HKLM\Software\Electronic Arts"] {
         let mut cmd = wine::tool_command(cfg)?;
-        cmd.args(["reg", "query", &format!("{root}\\{folder}")]).kill_on_drop(true);
-        let out = tokio::time::timeout(std::time::Duration::from_secs(60), cmd.output())
-            .await
-            .map_err(|_| "Wine no respondió al buscar el desinstalador".to_string())?
-            .map_err(|e| e.to_string())?;
-        if let Some(found) = parse_uninstaller(&String::from_utf8_lossy(&out.stdout)) {
+        cmd.args(["reg", "query", &format!("{root}\\{folder}")]);
+        if let Some(found) = parse_uninstaller(&wine::tool_output(cmd, "buscar el desinstalador").await?) {
             return Ok(found);
         }
     }

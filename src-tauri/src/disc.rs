@@ -17,7 +17,6 @@ const TASK: &str = "disc";
 /// Task of the running installer; its `task-finished` event tells the UI it's done.
 pub const INSTALL_TASK: &str = "disc-install";
 const DRIVES_KEY: &str = r"HKLM\Software\Wine\Drives";
-const REG_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Deserialize)]
 struct Lsblk {
@@ -266,11 +265,7 @@ async fn set_drive_type(app: &AppHandle, cfg: &Config, letter: char, cdrom: bool
     } else {
         cmd.args(["reg", "delete", DRIVES_KEY, "/v", &value, "/f"]);
     }
-    // Never leave the UI waiting on a stuck wine (e.g. a first-run prefix update).
-    cmd.kill_on_drop(true);
-    tokio::time::timeout(REG_TIMEOUT, wine::run_logged(app, TASK, cmd))
-        .await
-        .map_err(|_| "Wine no respondió al configurar la unidad de CD".to_string())?
+    wine::run_tool(app, TASK, cmd, "configurar la unidad de CD").await
 }
 
 /// Gives the mounted disc a drive letter: Wine's own if it maps it, or one we
@@ -347,9 +342,7 @@ pub async fn start(app: &AppHandle, cfg: &Config, discs: Vec<String>) -> Result<
     if discs.is_empty() {
         return Err("Elige las imágenes ISO o la unidad de DVD".into());
     }
-    if !wine::prefix_exists(cfg) {
-        return Err("Primero hay que crear el prefijo".into());
-    }
+    wine::require_prefix(cfg)?;
     let exes_before = exes_in(&cfg.wine_prefix().join("drive_c"));
     let mut session = Session { mounted: Vec::new(), discs, exes_before };
     for disc in session.discs.clone() {

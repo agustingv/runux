@@ -1,6 +1,6 @@
 import type { EaGame, ExternalGame, Game } from "../api";
 import { HomeIcon, PlusIcon } from "../icons";
-import { GameIcon } from "./GameIcon";
+import { RunningDot, SideGame } from "./GameParts";
 
 interface Props {
   games: Game[];
@@ -31,45 +31,49 @@ export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGam
       <div className="side-heading">Juegos</div>
       {games.length === 0 && <div className="side-empty">Sin juegos detectados</div>}
       {games.map((g) => (
-        <button
+        <SideGame
           key={g.uid}
-          className={`side-item ${selected === g.uid ? "active" : ""} ${g.installed ? "" : "dim"}`}
-          onClick={() => onSelect(g.uid)}
-          title={g.name}
+          gameKey={g.uid}
+          name={g.name}
+          accent={g.accent}
+          ready={g.installed}
+          dim={!g.installed}
+          active={selected === g.uid}
+          onSelect={() => onSelect(g.uid)}
         >
-          <GameIcon gameKey={g.uid} name={g.name} ready={g.installed} className="side-icon" style={{ background: g.accent }} />
-          <span className="side-label">{g.name}</span>
-          {g.running && <span className="dot running" title="En ejecución" />}
+          {g.running && <RunningDot />}
           {!g.running && g.updateProgress !== null && <span className="dot updating" title="Actualizando" />}
-        </button>
+        </SideGame>
       ))}
 
       {eaGames.length > 0 && <div className="side-heading">EA</div>}
       {eaGames.map((g) => (
-        <button
+        <SideGame
           key={g.id}
-          className={`side-item ${selected === eaKey(g.id) ? "active" : ""}`}
-          onClick={() => onSelect(eaKey(g.id))}
-          title={g.name}
+          gameKey={eaKey(g.id)}
+          name={g.name}
+          accent={g.accent}
+          ready
+          active={selected === eaKey(g.id)}
+          onSelect={() => onSelect(eaKey(g.id))}
         >
-          <GameIcon gameKey={eaKey(g.id)} name={g.name} ready className="side-icon" style={{ background: g.accent }} />
-          <span className="side-label">{g.name}</span>
-          {g.running && <span className="dot running" title="En ejecución" />}
-        </button>
+          {g.running && <RunningDot />}
+        </SideGame>
       ))}
 
       <div className="side-heading">Otros juegos</div>
       {external.map((g) => (
-        <button
+        <SideGame
           key={g.id}
-          className={`side-item ${selected === externalKey(g.id) ? "active" : ""}`}
-          onClick={() => onSelect(externalKey(g.id))}
-          title={g.name}
+          gameKey={externalKey(g.id)}
+          name={g.name}
+          accent={g.accent}
+          ready={g.kind === "windows"}
+          active={selected === externalKey(g.id)}
+          onSelect={() => onSelect(externalKey(g.id))}
         >
-          <GameIcon gameKey={externalKey(g.id)} name={g.name} ready={g.kind === "windows"} className="side-icon" style={{ background: g.accent }} />
-          <span className="side-label">{g.name}</span>
-          {g.running && <span className="dot running" title="En ejecución" />}
-        </button>
+          {g.running && <RunningDot />}
+        </SideGame>
       ))}
       <button className="side-item" onClick={onAddGame}>
         <span className="side-icon home"><PlusIcon size={16} /></span>

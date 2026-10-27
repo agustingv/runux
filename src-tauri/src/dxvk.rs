@@ -2,25 +2,12 @@
 
 use crate::config::Config;
 use crate::{download, wine};
-use serde::Deserialize;
 use std::path::{Component, Path};
 use tauri::AppHandle;
 
 const RELEASES: &str = "https://api.github.com/repos/doitsujin/dxvk/releases/latest";
 const DLLS: &[&str] = &["d3d8", "d3d9", "d3d10core", "d3d11", "dxgi"];
 const MARKER: &str = ".btn-dxvk";
-
-#[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
-}
-
-#[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-}
 
 pub fn installed_version(cfg: &Config) -> Option<String> {
     std::fs::read_to_string(cfg.wine_prefix().join(MARKER))
@@ -31,15 +18,7 @@ pub fn installed_version(cfg: &Config) -> Option<String> {
 pub async fn install(app: &AppHandle, cfg: &Config) -> Result<String, String> {
     const TASK: &str = "dxvk";
     wine::log(app, TASK, "Buscando la última versión de DXVK…");
-    let release: Release = download::client()?
-        .get(RELEASES)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let release = download::latest_release(RELEASES).await?;
     let asset = release
         .assets
         .iter()
@@ -58,7 +37,7 @@ pub async fn install(app: &AppHandle, cfg: &Config) -> Result<String, String> {
     for dll in DLLS {
         let mut cmd = wine::command(cfg)?;
         cmd.args(["reg", "add", r"HKCU\Software\Wine\DllOverrides", "/v", dll, "/d", "native", "/f"]);
-        wine::run_logged(app, TASK, cmd).await?;
+        wine::run_tool(app, TASK, cmd, "registrar las DLLs de DXVK").await?;
     }
 
     std::fs::write(cfg.wine_prefix().join(MARKER), &release.tag_name).map_err(|e| e.to_string())?;

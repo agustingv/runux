@@ -122,6 +122,10 @@ pub fn scummvm_bin() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+fn scummvm() -> Result<PathBuf, String> {
+    scummvm_bin().ok_or_else(|| "ScummVM no está instalado (sudo apt install scummvm)".into())
+}
+
 pub(crate) fn slug(name: &str) -> String {
     let s: String = name
         .to_lowercase()
@@ -158,8 +162,7 @@ fn parse_detect(output: &str) -> Option<(String, String)> {
 }
 
 async fn detect_scummvm(app: &AppHandle, dir: &Path) -> Result<(String, String), String> {
-    let bin = scummvm_bin().ok_or("ScummVM no está instalado (sudo apt install scummvm)")?;
-    let out = Command::new(bin)
+    let out = Command::new(scummvm()?)
         .arg("--detect")
         .arg(format!("--path={}", dir.display()))
         .output()
@@ -220,8 +223,8 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
     if !isos.is_empty() && isos.len() != req.sources.len() {
         return Err("Elige solo imágenes ISO, o solo una carpeta".into());
     }
-    if req.kind == Kind::Scummvm && scummvm_bin().is_none() {
-        return Err("ScummVM no está instalado (sudo apt install scummvm)".into());
+    if req.kind == Kind::Scummvm {
+        scummvm()?;
     }
 
     let (path, imported) = match (req.kind, isos.is_empty()) {
@@ -316,16 +319,22 @@ pub fn remove(id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn valid_env_name(name: &str) -> bool {
+fn valid_env_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, String> {
-    if let Some(bad) = env.keys().find(|k| !valid_env_name(k)) {
-        return Err(format!("Nombre de variable no válido: «{bad}»"));
+/// Rejects names a process environment can't hold, before saving them.
+pub(crate) fn check_env(env: &BTreeMap<String, String>) -> Result<(), String> {
+    match env.keys().find(|k| !valid_env_name(k)) {
+        Some(bad) => Err(format!("Nombre de variable no válido: «{bad}»")),
+        None => Ok(()),
     }
+}
+
+pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, String> {
+    check_env(&env)?;
     let _lock = lock();
     let mut games = load();
     let game = games
@@ -341,12 +350,9 @@ pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, 
 pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), String> {
     let task = format!("ext:{}", game.id);
     wine::log(app, &task, format!("Lanzando {}", game.name));
-    for (k, v) in &game.env {
-        wine::log(app, &task, format!("{k}={v}"));
-    }
-    let mut cmd = match game.kind {
+    let cmd = match game.kind {
         Kind::Scummvm => {
-            let bin = scummvm_bin().ok_or("ScummVM no está instalado (sudo apt install scummvm)")?;
+            let bin = scummvm()?;
             let target = game.scummvm_id.as_deref().ok_or("Falta el identificador de ScummVM")?;
             let mut cmd = Command::new(bin);
             cmd.arg(format!("--path={}", game.path.display())).arg(target);
@@ -359,10 +365,7 @@ pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), 
             cmd
         }
     };
-    cmd.env("PROTON_LOG_DIR", wine::game_log_dir(&task));
-    // Last, so they can override the runner's own (e.g. `WINEDEBUG`).
-    cmd.envs(&game.env);
-    wine::spawn_logged(app, &task, cmd);
+    wine::spawn_game(app, &task, cmd, &game.env);
     Ok(())
 }
 

@@ -1,7 +1,6 @@
-import type { CSSProperties } from "react";
 import { type Game } from "../api";
-import { FolderIcon, PlayIcon } from "../icons";
-import { GameIcon } from "./GameIcon";
+import { FolderIcon } from "../icons";
+import { Banner, PlayButton } from "./GameParts";
 
 interface Props {
   game: Game;
@@ -30,23 +29,10 @@ export function GameView({ game, launching, battlenetRunning, onPlay, onOpenBatt
 
   return (
     <div className="game-view">
-      <header
-        className="banner"
-        style={{ "--accent": game.accent } as CSSProperties}
-      >
-        <GameIcon gameKey={game.uid} name={game.name} ready={game.installed} className="banner-mark" />
-        <h1>{game.name}</h1>
-      </header>
+      <Banner gameKey={game.uid} name={game.name} accent={game.accent} ready={game.installed} />
 
       <section className="play-bar">
-        <button
-          className="play-btn"
-          onClick={action.onClick}
-          disabled={action.disabled}
-        >
-          {action.label === "Jugar" && <PlayIcon />}
-          {action.label}
-        </button>
+        <PlayButton {...action} />
         <button className="ghost-btn" onClick={onOpenFolder} disabled={!game.installed}>
           <FolderIcon /> Carpeta
         </button>

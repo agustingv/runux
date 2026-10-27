@@ -3,7 +3,7 @@
 //! optional: GE-Proton runs without it.
 
 use crate::{config, download, wine};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -274,32 +274,12 @@ pub fn resolve(selected: Option<&Path>) -> Option<ProtonBuild> {
     }
 }
 
-#[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
-}
-
-#[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-}
-
 /// Downloads the latest GE-Proton release into [`own_dir`], and the Steam
 /// Linux Runtime it needs when neither Steam nor the app has it. Skips what is
 /// already there; older releases are kept for whoever selected them.
 pub async fn install_ge(app: &AppHandle) -> Result<GeInstall, String> {
     wine::log(app, GE_TASK, "Buscando la última versión de GE-Proton…");
-    let release: Release = download::client()?
-        .get(GE_RELEASES)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let release = download::latest_release(GE_RELEASES).await?;
     let asset_name = format!("{}-{}.tar.gz", release.tag_name, std::env::consts::ARCH);
     let find = |name: &str| release.assets.iter().find(|a| a.name == name);
     let asset = find(&asset_name)
@@ -311,7 +291,7 @@ pub async fn install_ge(app: &AppHandle) -> Result<GeInstall, String> {
     let updated = !dest.join("proton").is_file();
     if updated {
         let sums_asset = find(&format!("{name}.sha512sum")).ok_or("La release de GE-Proton no trae su suma SHA-512")?;
-        let sums = fetch_text(&sums_asset.browser_download_url).await?;
+        let sums = download::fetch_text(&sums_asset.browser_download_url).await?;
         let expected = checksum_for(&sums, &asset_name).ok_or("La suma SHA-512 de GE-Proton no nombra el archivo")?;
         let archive = download_verified::<sha2::Sha512>(app, &asset.browser_download_url, &asset_name, &expected).await?;
         wine::log(app, GE_TASK, "Descomprimiendo GE-Proton…");
@@ -346,25 +326,13 @@ async fn install_runtime(app: &AppHandle, appid: &str) -> Result<String, String>
         .ok_or_else(|| format!("GE-Proton necesita un Steam Linux Runtime desconocido ({appid})"))?;
     let file = format!("{}.tar.xz", rt.dir);
     wine::log(app, GE_TASK, format!("GE-Proton se ejecuta dentro de {}. Descargándolo…", rt.name));
-    let sums = fetch_text(&format!("{}/SHA256SUMS", rt.base_url)).await?;
+    let sums = download::fetch_text(&format!("{}/SHA256SUMS", rt.base_url)).await?;
     let expected = checksum_for(&sums, &file).ok_or_else(|| format!("SHA256SUMS no incluye {file}"))?;
     let archive = download_verified::<sha2::Sha256>(app, &format!("{}/{file}", rt.base_url), &file, &expected).await?;
     wine::log(app, GE_TASK, format!("Descomprimiendo {}…", rt.name));
     unpack(archive, runtimes_dir(), rt.dir.to_string(), |p| p.join("_v2-entry-point").is_file(), true).await?;
     wine::log(app, GE_TASK, format!("{} instalado", rt.name));
     Ok(rt.name.to_string())
-}
-
-async fn fetch_text(url: &str) -> Result<String, String> {
-    download::client()?
-        .get(url)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("Error descargando {url}: {e}"))?
-        .text()
-        .await
-        .map_err(|e| e.to_string())
 }
 
 /// The hash for `file` in a `sha256sum`-style list (`<hash>  <file>` or `<hash> *<file>`).
@@ -378,11 +346,8 @@ fn checksum_for(sums: &str, file: &str) -> Option<String> {
 /// Downloads `url` into the cache as `file` and checks it against `expected`
 /// (hex), deleting it if it doesn't match.
 async fn download_verified<D: sha2::Digest>(app: &AppHandle, url: &str, file: &str, expected: &str) -> Result<PathBuf, String> {
-    let cache = config::cache_dir();
-    std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-    let archive = cache.join(file);
     wine::log(app, GE_TASK, format!("Descargando {file}"));
-    download::fetch_to_file(app, GE_TASK, url, &archive).await?;
+    let archive = download::fetch_to_cache(app, GE_TASK, url, file).await?;
     let path = archive.clone();
     let actual = tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
         let mut hasher = D::new();

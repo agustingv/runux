@@ -121,24 +121,16 @@ async fn install_dxvk(app: AppHandle, state: State<'_, AppState>) -> Result<Stri
     if cfg.runner == Runner::Proton {
         return Err("Proton ya incluye DXVK".into());
     }
-    if !wine::prefix_exists(&cfg) {
-        return Err("Primero hay que crear el prefijo".into());
-    }
+    wine::require_prefix(&cfg)?;
     dxvk::install(&app, &cfg).await
 }
 
 #[tauri::command]
 async fn install_battlenet(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let cfg = state.config();
-    if !wine::prefix_exists(&cfg) {
-        return Err("Primero hay que crear el prefijo".into());
-    }
+    wine::require_prefix(&cfg)?;
     wine::log(&app, "installer", "Descargando el instalador de Battle.net…");
-    let setup = download::fetch(&app, "installer", INSTALLER_URL).await?;
-    let cache = config::cache_dir();
-    std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-    let setup_path = cache.join("Battle.net-Setup.exe");
-    std::fs::write(&setup_path, setup).map_err(|e| e.to_string())?;
+    let setup_path = download::fetch_to_cache(&app, "installer", INSTALLER_URL, "Battle.net-Setup.exe").await?;
 
     wine::log(&app, "installer", "Ejecutando el instalador. Sigue los pasos en su ventana.");
     let mut cmd = wine::command(&cfg)?;
@@ -202,17 +194,15 @@ async fn close_ea(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn launch_ea_game(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     let cfg = state.config().ea();
-    let game = ea::find_game(&cfg, &id)?;
+    let game = ea::find_game(&cfg, &id, &[])?;
     ea::launch_game(&app, &cfg, &game).await
 }
 
 #[tauri::command]
 async fn uninstall_ea_game(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     let cfg = state.config().ea();
-    let game = ea::games(&cfg, &wine::running_cmdlines())
-        .into_iter()
-        .find(|g| g.id == id)
-        .ok_or_else(|| format!("Juego de EA desconocido: {id}"))?;
+    // Running games can't be uninstalled.
+    let game = ea::find_game(&cfg, &id, &wine::running_cmdlines())?;
     ea::uninstall_game(&app, &cfg, &game).await
 }
 
@@ -228,7 +218,7 @@ fn set_ea_game_env(id: String, env: std::collections::BTreeMap<String, String>) 
 
 #[tauri::command]
 fn open_ea_game_folder(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    xdg_open(&ea::find_game(&state.config().ea(), &id)?.path)
+    xdg_open(&ea::find_game(&state.config().ea(), &id, &[])?.path)
 }
 
 #[tauri::command]
@@ -330,7 +320,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
     let cfg = state.config();
     tokio::task::spawn_blocking(move || {
         let exe = if let Some(id) = key.strip_prefix("ea:") {
-            ea::find_game(&cfg.ea(), id).ok()?.exe?
+            ea::find_game(&cfg.ea(), id, &[]).ok()?.exe?
         } else if let Some(id) = key.strip_prefix("ext:") {
             external::find(id).ok()?.exe?
         } else {

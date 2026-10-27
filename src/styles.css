@@ -192,6 +192,10 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
   display: grid; place-items: center; height: 110px;
   font-size: 44px; font-weight: 900; color: rgba(11,13,18,.75);
 }
+.tile-icon img {
+  display: block; width: 72px; height: 72px; object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.45));
+}
 .tile-name { padding: 0 12px; font-weight: 600; }
 .tile-state { padding: 0 12px; font-size: 12px; }
 

@@ -1,7 +1,7 @@
 use crate::config::{self, Config, Runner};
 use crate::proton::{self, ProtonBuild};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
@@ -213,6 +213,10 @@ async fn version(cfg: &Config) -> Option<String> {
 
 pub fn prefix_exists(cfg: &Config) -> bool {
     cfg.wine_prefix().join("system.reg").is_file()
+}
+
+pub fn require_prefix(cfg: &Config) -> Result<(), String> {
+    if prefix_exists(cfg) { Ok(()) } else { Err("Primero hay que crear el prefijo".into()) }
 }
 
 /// Creates the configured prefix, logging under `task`.
@@ -587,6 +591,40 @@ pub async fn run_logged(app: &AppHandle, task: &str, mut cmd: Command) -> Result
     } else {
         Err(format!("{task} terminó con {status}"))
     }
+}
+
+/// Longest wait for a short-lived Wine tool (`reg`…): a stuck wine (e.g. a
+/// first-run prefix update) must not leave the UI waiting forever.
+const TOOL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Runs a short-lived Wine tool like [`run_logged`], killing it after
+/// [`TOOL_TIMEOUT`]. `doing` completes "Wine no respondió al…" if it hangs.
+pub async fn run_tool(app: &AppHandle, task: &str, mut cmd: Command, doing: &str) -> Result<(), String> {
+    cmd.kill_on_drop(true);
+    tokio::time::timeout(TOOL_TIMEOUT, run_logged(app, task, cmd))
+        .await
+        .map_err(|_| format!("Wine no respondió al {doing}"))?
+}
+
+/// Like [`run_tool`], returning the tool's standard output instead of logging it.
+pub async fn tool_output(mut cmd: Command, doing: &str) -> Result<String, String> {
+    cmd.kill_on_drop(true);
+    let out = tokio::time::timeout(TOOL_TIMEOUT, cmd.output())
+        .await
+        .map_err(|_| format!("Wine no respondió al {doing}"))?
+        .map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Starts a game under `task` (`ea:<id>`, `ext:<id>`), with Proton's log in
+/// the game's own folder and the user's variables `env`, set last so they can
+/// override the runner's own (e.g. `WINEDEBUG`).
+pub fn spawn_game(app: &AppHandle, task: &str, mut cmd: Command, env: &BTreeMap<String, String>) {
+    for (k, v) in env {
+        log(app, task, format!("{k}={v}"));
+    }
+    cmd.env("PROTON_LOG_DIR", game_log_dir(task)).envs(env);
+    spawn_logged(app, task, cmd);
 }
 
 /// Starts a long-running command in the background; emits `task-finished` when it exits.

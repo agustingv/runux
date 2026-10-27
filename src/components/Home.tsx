@@ -1,5 +1,6 @@
-import { initials, type EaGame, type ExternalGame, type Game, type Progress, type Status } from "../api";
+import { type EaGame, type ExternalGame, type Game, type Progress, type Status } from "../api";
 import { Missing32Bit } from "./Missing32Bit";
+import { GameTile } from "./GameParts";
 import { ProgressBar } from "./Setup";
 import { eaKey, externalKey } from "./Sidebar";
 
@@ -26,6 +27,8 @@ interface EaProps {
   onOpen: () => void;
   onClose: () => void;
 }
+
+const readiness = (g: { running: boolean }) => (g.running ? "En ejecución" : "Listo");
 
 function EaCard({ status, ea }: { status: Status; ea: EaProps }) {
   const description = ea.installing
@@ -133,16 +136,18 @@ export function Home({
       ) : (
         <div className="grid">
           {games.map((g) => (
-            <button key={g.uid} className="tile" onClick={() => onSelect(g.uid)}>
-              <div className="tile-art" style={{ background: g.accent }}>{initials(g.name)}</div>
-              <div className="tile-name">{g.name}</div>
-              <div className="tile-state muted">
-                {g.running ? "En ejecución"
-                  : g.updateProgress !== null ? `Actualizando ${(g.updateProgress * 100).toFixed(0)}%`
-                  : !g.installed ? "No instalado"
-                  : g.playable ? "Listo" : "Necesita actualización"}
-              </div>
-            </button>
+            <GameTile
+              key={g.uid}
+              gameKey={g.uid}
+              name={g.name}
+              accent={g.accent}
+              ready={g.installed}
+              onClick={() => onSelect(g.uid)}
+              state={g.running ? "En ejecución"
+                : g.updateProgress !== null ? `Actualizando ${(g.updateProgress * 100).toFixed(0)}%`
+                : !g.installed ? "No instalado"
+                : g.playable ? "Listo" : "Necesita actualización"}
+            />
           ))}
         </div>
       )}
@@ -152,11 +157,7 @@ export function Home({
           <h3 className="section-title">Juegos de EA</h3>
           <div className="grid">
             {eaGames.map((g) => (
-              <button key={g.id} className="tile" onClick={() => onSelect(eaKey(g.id))}>
-                <div className="tile-art" style={{ background: g.accent }}>{initials(g.name)}</div>
-                <div className="tile-name">{g.name}</div>
-                <div className="tile-state muted">{g.running ? "En ejecución" : "Listo"}</div>
-              </button>
+              <GameTile key={g.id} gameKey={eaKey(g.id)} name={g.name} accent={g.accent} ready state={readiness(g)} onClick={() => onSelect(eaKey(g.id))} />
             ))}
           </div>
         </>
@@ -167,11 +168,7 @@ export function Home({
           <h3 className="section-title">Otros juegos</h3>
           <div className="grid">
             {external.map((g) => (
-              <button key={g.id} className="tile" onClick={() => onSelect(externalKey(g.id))}>
-                <div className="tile-art" style={{ background: g.accent }}>{initials(g.name)}</div>
-                <div className="tile-name">{g.name}</div>
-                <div className="tile-state muted">{g.running ? "En ejecución" : "Listo"}</div>
-              </button>
+              <GameTile key={g.id} gameKey={externalKey(g.id)} name={g.name} accent={g.accent} ready={g.kind === "windows"} state={readiness(g)} onClick={() => onSelect(externalKey(g.id))} />
             ))}
           </div>
         </>

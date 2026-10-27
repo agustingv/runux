@@ -1,9 +1,8 @@
-import type { CSSProperties } from "react";
 import { type ExternalGame, type Runner } from "../api";
 import { EnvEditor } from "./EnvEditor";
 import { Troubleshooting } from "./Troubleshooting";
-import { FolderIcon, PlayIcon } from "../icons";
-import { GameIcon } from "./GameIcon";
+import { FolderIcon } from "../icons";
+import { Banner, SimplePlayButton } from "./GameParts";
 import { externalKey } from "./Sidebar";
 
 interface Props {
@@ -17,20 +16,12 @@ interface Props {
 }
 
 export function ExternalGameView({ game, runner, launching, onPlay, onOpenFolder, onRemove, onSaveEnv }: Props) {
-  const label = game.running ? "Jugando" : launching ? "Iniciando…" : "Jugar";
-
   return (
     <div className="game-view">
-      <header className="banner" style={{ "--accent": game.accent } as CSSProperties}>
-        <GameIcon gameKey={externalKey(game.id)} name={game.name} ready={game.kind === "windows"} className="banner-mark" />
-        <h1>{game.name}</h1>
-      </header>
+      <Banner gameKey={externalKey(game.id)} name={game.name} accent={game.accent} ready={game.kind === "windows"} />
 
       <section className="play-bar">
-        <button className="play-btn" onClick={onPlay} disabled={game.running || launching}>
-          {label === "Jugar" && <PlayIcon />}
-          {label}
-        </button>
+        <SimplePlayButton running={game.running} launching={launching} onPlay={onPlay} />
         <button className="ghost-btn" onClick={onOpenFolder}>
           <FolderIcon /> Carpeta
         </button>

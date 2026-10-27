@@ -138,19 +138,10 @@ export default function App() {
 
   const openBattlenet = () => startTask("battlenet", api.launchBattlenet);
 
-  const play = (uid: string) => {
-    setLaunching((prev) => ({ ...prev, [uid]: Date.now() }));
-    startTask(uid, () => api.launchGame(uid));
-  };
-
-  const playExternal = (id: string) => {
-    setLaunching((prev) => ({ ...prev, [externalKey(id)]: Date.now() }));
-    startTask(externalKey(id), () => api.launchExternalGame(id));
-  };
-
-  const playEa = (id: string) => {
-    setLaunching((prev) => ({ ...prev, [eaKey(id)]: Date.now() }));
-    startTask(eaKey(id), () => api.launchEaGame(id));
+  /** Launches the game with sidebar key `key`, showing "Iniciando…" until it runs. */
+  const play = (key: string, launch: () => Promise<void>) => {
+    setLaunching((prev) => ({ ...prev, [key]: Date.now() }));
+    startTask(key, launch);
   };
 
   const uninstallBattlenetGame = async (g: Game) => {
@@ -280,7 +271,7 @@ export default function App() {
                 await api.setEaOverlay(enabled);
                 refresh();
               }}
-              onPlay={() => playEa(eaGame.id)}
+              onPlay={() => play(eaKey(eaGame.id), () => api.launchEaGame(eaGame.id))}
               onOpenFolder={guard(() => api.openEaGameFolder(eaGame.id))}
               uninstalling={busy.has(eaUninstallTask(eaGame.id))}
               onUninstall={() => uninstallEa(eaGame)}
@@ -294,7 +285,7 @@ export default function App() {
               game={ext}
               runner={status.runner}
               launching={externalKey(ext.id) in launching}
-              onPlay={() => playExternal(ext.id)}
+              onPlay={() => play(externalKey(ext.id), () => api.launchExternalGame(ext.id))}
               onOpenFolder={guard(() => api.openExternalFolder(ext.id))}
               onRemove={() => removeGame(ext)}
               onSaveEnv={async (env) => {
@@ -318,7 +309,7 @@ export default function App() {
             <GameView
               game={game}
               launching={game.uid in launching}
-              onPlay={() => play(game.uid)}
+              onPlay={() => play(game.uid, () => api.launchGame(game.uid))}
               battlenetRunning={status.battlenetRunning}
               onOpenBattlenet={openBattlenet}
               onOpenFolder={guard(() => api.openGameFolder(game.uid))}
