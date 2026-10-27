@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { EA_INSTALL_TASK, formatBytes, GE_PROTON_TASK, type Progress, type Status } from "../api";
+import { formatBytes, TASK, type Progress, type Status } from "../api";
 import { CheckIcon } from "../icons";
 import { Missing32Bit } from "./Missing32Bit";
 
@@ -74,7 +74,7 @@ export function Setup(props: Props) {
             isProton
               ? wineOk
                 ? `Usando ${status.runnerLabel}. Puedes elegir otra versión en Ajustes.`
-                : busy.has(GE_PROTON_TASK)
+                : busy.has(TASK.geProton)
                   ? "Descargando GE-Proton y el Steam Linux Runtime en el que se ejecuta. Puede tardar unos minutos."
                   : <>{status.runnerProblem ?? "No se encontró Proton."} No necesitas Steam: Runux
                       descarga GE-Proton y lo que necesita (unos 800 MB en total).</>
@@ -87,10 +87,10 @@ export function Setup(props: Props) {
         >
           {isProton && !wineOk && (
             <>
-              <button className="play-btn small" disabled={busy.has(GE_PROTON_TASK)} onClick={props.onInstallGeProton}>
-                {busy.has(GE_PROTON_TASK) ? "Descargando…" : "Descargar GE-Proton"}
+              <button className="play-btn small" disabled={busy.has(TASK.geProton)} onClick={props.onInstallGeProton}>
+                {busy.has(TASK.geProton) ? "Descargando…" : "Descargar GE-Proton"}
               </button>
-              {busy.has(GE_PROTON_TASK) && <ProgressBar p={progress[GE_PROTON_TASK]} />}
+              {busy.has(TASK.geProton) && <ProgressBar p={progress[TASK.geProton]} />}
             </>
           )}
           <button className="ghost-btn" onClick={props.onOpenSettings}>Ajustes</button>
@@ -107,8 +107,8 @@ export function Setup(props: Props) {
           }
         >
           {!status.prefixExists && (
-            <button className="play-btn small" disabled={!wineOk || busy.has("prefix")} onClick={props.onCreatePrefix}>
-              {busy.has("prefix") ? "Creando…" : "Crear prefijo"}
+            <button className="play-btn small" disabled={!wineOk || busy.has(TASK.prefix)} onClick={props.onCreatePrefix}>
+              {busy.has(TASK.prefix) ? "Creando…" : "Crear prefijo"}
             </button>
           )}
         </Step>
@@ -124,10 +124,10 @@ export function Setup(props: Props) {
         >
           {status.dxvkVersion === null && (
             <>
-              <button className="play-btn small" disabled={!status.prefixExists || busy.has("dxvk")} onClick={props.onInstallDxvk}>
-                {busy.has("dxvk") ? "Instalando…" : "Instalar DXVK"}
+              <button className="play-btn small" disabled={!status.prefixExists || busy.has(TASK.dxvk)} onClick={props.onInstallDxvk}>
+                {busy.has(TASK.dxvk) ? "Instalando…" : "Instalar DXVK"}
               </button>
-              {busy.has("dxvk") && <ProgressBar p={progress.dxvk} />}
+              {busy.has(TASK.dxvk) && <ProgressBar p={progress[TASK.dxvk]} />}
             </>
           )}
         </Step>}
@@ -143,38 +143,38 @@ export function Setup(props: Props) {
               <div className="store-text">
                 <b>Battle.net</b>
                 <span className="muted">
-                  {busy.has("installer")
+                  {busy.has(TASK.installer)
                     ? "Instalador en marcha: sigue los pasos en su ventana. Este paso se completará solo."
                     : status.prefixExists
                       ? "Descarga el instalador oficial de Blizzard y lo ejecuta en su prefijo."
                       : "Crea primero el prefijo del paso 2."}
                 </span>
-                {busy.has("installer") && <ProgressBar p={progress.installer} />}
+                {busy.has(TASK.installer) && <ProgressBar p={progress[TASK.installer]} />}
               </div>
               <button
                 className="play-btn small"
-                disabled={!status.prefixExists || busy.has("installer")}
+                disabled={!status.prefixExists || busy.has(TASK.installer)}
                 onClick={props.onInstallBattlenet}
               >
-                {busy.has("installer") ? "Instalando…" : "Instalar"}
+                {busy.has(TASK.installer) ? "Instalando…" : "Instalar"}
               </button>
             </div>
             <div className="store-option">
               <div className="store-text">
                 <b>EA app</b>
                 <span className="muted">
-                  {busy.has(EA_INSTALL_TASK)
+                  {busy.has(TASK.eaInstaller)
                     ? "Instalador en marcha: sigue los pasos en su ventana. Este paso se completará solo."
                     : "Descarga el instalador oficial de Electronic Arts y lo ejecuta en un prefijo propio."}
                 </span>
-                {busy.has(EA_INSTALL_TASK) && <ProgressBar p={progress[EA_INSTALL_TASK]} />}
+                {busy.has(TASK.eaInstaller) && <ProgressBar p={progress[TASK.eaInstaller]} />}
               </div>
               <button
                 className="play-btn small"
-                disabled={!wineOk || busy.has(EA_INSTALL_TASK)}
+                disabled={!wineOk || busy.has(TASK.eaInstaller)}
                 onClick={props.onInstallEa}
               >
-                {busy.has(EA_INSTALL_TASK) ? "Instalando…" : "Instalar"}
+                {busy.has(TASK.eaInstaller) ? "Instalando…" : "Instalar"}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DISC_INSTALL_TASK, eaUninstallTask, uninstallTask, type EaGame, EA_INSTALL_TASK, EA_TASK, errorMessage, GE_PROTON_TASK, events, type AddGameRequest, type Config, type ExternalGame, type Game, type LogLine, type Progress, type Status } from "./api";
+import { useEffect, useState } from "react";
+import { api, eaUninstallTask, errorMessage, TASK, uninstallTask, type AddGameRequest, type Config, type EaGame, type ExternalGame, type Game } from "./api";
 import { AddGame } from "./components/AddGame";
 import { Console } from "./components/Console";
 import { ExternalGameView } from "./components/ExternalGameView";
@@ -11,138 +11,24 @@ import { Setup } from "./components/Setup";
 import { EaGameView } from "./components/EaGameView";
 import { eaKey, externalKey, HOME, Sidebar } from "./components/Sidebar";
 import { GearIcon, TerminalIcon } from "./icons";
-
-const POLL_MS = 3000;
-const MAX_LOGS = 1000;
-/** How long the "Iniciando…" state lasts if the game never shows up as running. */
-const LAUNCH_TIMEOUT_MS = 45_000;
+import { useLauncher } from "./useLauncher";
 
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
-  const [status, setStatus] = useState<Status | null>(null);
-  const [games, setGames] = useState<Game[]>([]);
-  const [external, setExternal] = useState<ExternalGame[]>([]);
-  const [eaGames, setEaGames] = useState<EaGame[]>([]);
   const [showAddGame, setShowAddGame] = useState(false);
   const [selected, setSelected] = useState(HOME);
-  const [busy, setBusy] = useState<Set<string>>(new Set());
-  const [launching, setLaunching] = useState<Record<string, number>>({});
-  const [progress, setProgress] = useState<Record<string, Progress>>({});
-  const [logs, setLogs] = useState<LogLine[]>([]);
   const [showConsole, setShowConsole] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const markBusy = useCallback((task: string, on: boolean) => {
-    setBusy((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(task);
-      else next.delete(task);
-      return next;
-    });
-  }, []);
-
-  // One refresh at a time: asking while one runs queues another after it,
-  // so slow ones don't pile up and the latest change is always picked up.
-  const refreshing = useRef(false);
-  const refreshAgain = useRef(false);
-
-  const refresh = useCallback(async () => {
-    if (refreshing.current) {
-      refreshAgain.current = true;
-      return;
-    }
-    refreshing.current = true;
-    try {
-      do {
-        refreshAgain.current = false;
-        const s = await api.snapshot();
-        setStatus(s.status);
-        setGames(s.games);
-        setExternal(s.external);
-        setEaGames(s.eaGames);
-      } while (refreshAgain.current);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      refreshing.current = false;
-    }
-  }, []);
+  const {
+    status, games, external, eaGames, busy, launching, progress, logs, error,
+    setError, clearLogs, refresh, runTask, startTask, play, clearProgress, guard,
+  } = useLauncher({ onTaskError: () => setShowConsole(true) });
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch((e) => setError(errorMessage(e)));
-    refresh();
-    const id = setInterval(refresh, POLL_MS);
-    return () => clearInterval(id);
-  }, [refresh]);
+  }, [setError]);
 
-  useEffect(() => {
-    const subs = [
-      events.onLog((l) => setLogs((prev) => [...prev.slice(-MAX_LOGS + 1), l])),
-      events.onProgress((p) => setProgress((prev) => ({ ...prev, [p.task]: p }))),
-      events.onTaskFinished((t) => {
-        markBusy(t.task, false);
-        if (!t.success) setError(`La tarea "${t.task}" terminó con error. Revisa el registro.`);
-        refresh();
-      }),
-    ];
-    return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
-  }, [markBusy, refresh]);
-
-  // Drop the "launching" flag once the game runs or the timeout expires.
-  useEffect(() => {
-    const now = Date.now();
-    const stale = Object.entries(launching).filter(
-      ([key, t]) =>
-        now - t > LAUNCH_TIMEOUT_MS ||
-        games.find((g) => g.uid === key)?.running ||
-        external.find((g) => externalKey(g.id) === key)?.running ||
-        eaGames.find((g) => eaKey(g.id) === key)?.running,
-    );
-    if (stale.length) {
-      setLaunching((prev) => {
-        const next = { ...prev };
-        stale.forEach(([uid]) => delete next[uid]);
-        return next;
-      });
-    }
-  }, [games, external, eaGames, launching]);
-
-  /** Runs a command that finishes when the work is done; its result, or `undefined` if it failed. */
-  const runTask = async <T,>(task: string, fn: () => Promise<T>): Promise<T | undefined> => {
-    markBusy(task, true);
-    setError(null);
-    try {
-      return await fn();
-    } catch (e) {
-      setError(errorMessage(e));
-      setShowConsole(true);
-    } finally {
-      markBusy(task, false);
-      refresh();
-    }
-  };
-
-  /** Runs a command that spawns a background process; `task-finished` clears it. */
-  const startTask = async (task: string, fn: () => Promise<unknown>) => {
-    markBusy(task, true);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      markBusy(task, false);
-      setError(errorMessage(e));
-    }
-    refresh();
-  };
-
-  const openBattlenet = () => startTask("battlenet", api.launchBattlenet);
-
-  /** Launches the game with sidebar key `key`, showing "Iniciando…" until it runs. */
-  const play = (key: string, launch: () => Promise<void>) => {
-    setLaunching((prev) => ({ ...prev, [key]: Date.now() }));
-    startTask(key, launch);
-  };
+  const openBattlenet = () => startTask(TASK.battlenet, api.launchBattlenet);
 
   const uninstallBattlenetGame = async (g: Game) => {
     const ok = await ask(
@@ -161,19 +47,11 @@ export default function App() {
   };
 
   const addGame = async (request: AddGameRequest) => {
-    markBusy("import", true);
-    setError(null);
-    try {
-      const game = await api.addExternalGame(request);
+    const game = await runTask(TASK.import, () => api.addExternalGame(request));
+    clearProgress(TASK.import);
+    if (game) {
       setShowAddGame(false);
       setSelected(externalKey(game.id));
-    } catch (e) {
-      setError(errorMessage(e));
-      setShowConsole(true);
-    } finally {
-      markBusy("import", false);
-      setProgress(({ import: _, ...rest }) => rest);
-      refresh();
     }
   };
 
@@ -200,13 +78,11 @@ export default function App() {
     }
   };
 
-  const guard = (fn: () => Promise<unknown>) => () => fn().catch((e) => setError(errorMessage(e)));
-
   // Either client is enough to start: the other can be installed from Home.
   const ready = status && ((status.prefixExists && status.battlenetInstalled) || status.eaInstalled);
-  const installEa = () => startTask(EA_INSTALL_TASK, api.installEa);
+  const installEa = () => startTask(TASK.eaInstaller, api.installEa);
   const installBattlenet = () =>
-    startTask("installer", async () => {
+    startTask(TASK.installer, async () => {
       if (!status?.prefixExists) await api.createPrefix();
       await api.installBattlenet();
     });
@@ -298,12 +174,12 @@ export default function App() {
               status={status}
               busy={busy}
               progress={progress}
-              onCreatePrefix={() => runTask("prefix", api.createPrefix)}
-              onInstallDxvk={() => runTask("dxvk", api.installDxvk)}
+              onCreatePrefix={() => runTask(TASK.prefix, api.createPrefix)}
+              onInstallDxvk={() => runTask(TASK.dxvk, api.installDxvk)}
               onInstallBattlenet={installBattlenet}
               onInstallEa={installEa}
               onOpenSettings={() => setShowSettings(true)}
-              onInstallGeProton={() => runTask(GE_PROTON_TASK, api.installGeProton)}
+              onInstallGeProton={() => runTask(TASK.geProton, api.installGeProton)}
             />
           ) : game ? (
             <GameView
@@ -322,9 +198,9 @@ export default function App() {
               games={games}
               external={external}
               eaGames={eaGames}
-              battlenetStarting={busy.has("battlenet") && !status.battlenetRunning}
-              battlenetInstalling={busy.has("installer")}
-              battlenetProgress={progress.installer}
+              battlenetStarting={busy.has(TASK.battlenet) && !status.battlenetRunning}
+              battlenetInstalling={busy.has(TASK.installer)}
+              battlenetProgress={progress[TASK.installer]}
               onInstallBattlenet={installBattlenet}
               onOpenBattlenet={openBattlenet}
               onCloseBattlenet={guard(async () => {
@@ -333,11 +209,11 @@ export default function App() {
               })}
               onSelect={setSelected}
               ea={{
-                starting: busy.has(EA_TASK) && !status.eaRunning,
-                installing: busy.has(EA_INSTALL_TASK),
-                progress: progress[EA_INSTALL_TASK],
+                starting: busy.has(TASK.ea) && !status.eaRunning,
+                installing: busy.has(TASK.eaInstaller),
+                progress: progress[TASK.eaInstaller],
                 onInstall: installEa,
-                onOpen: () => startTask(EA_TASK, api.launchEa),
+                onOpen: () => startTask(TASK.ea, api.launchEa),
                 onClose: guard(async () => {
                   await api.closeEa();
                   refresh();
@@ -348,16 +224,16 @@ export default function App() {
         </main>
       </div>
 
-      {showConsole && <Console logs={logs} onClear={() => setLogs([])} />}
+      {showConsole && <Console logs={logs} onClear={clearLogs} />}
 
       {showAddGame && status && (
         <AddGame
           scummvmInstalled={status.scummvmInstalled}
-          busy={busy.has("import")}
-          installing={busy.has(DISC_INSTALL_TASK)}
-          progress={progress.import}
+          busy={busy.has(TASK.import)}
+          installing={busy.has(TASK.discInstall)}
+          progress={progress[TASK.import]}
           onAdd={addGame}
-          onInstall={(installer) => startTask(DISC_INSTALL_TASK, () => api.runDiscInstaller(installer))}
+          onInstall={(installer) => startTask(TASK.discInstall, () => api.runDiscInstaller(installer))}
           onClose={() => setShowAddGame(false)}
         />
       )}
@@ -370,9 +246,9 @@ export default function App() {
           onOpenPrefix={guard(api.openPrefix)}
           onOpenEaPrefix={guard(api.openEaPrefix)}
           onStopWine={guard(api.stopWine)}
-          onInstallGeProton={() => runTask(GE_PROTON_TASK, api.installGeProton)}
-          installingGeProton={busy.has(GE_PROTON_TASK)}
-          geProtonProgress={progress[GE_PROTON_TASK]}
+          onInstallGeProton={() => runTask(TASK.geProton, api.installGeProton)}
+          installingGeProton={busy.has(TASK.geProton)}
+          geProtonProgress={progress[TASK.geProton]}
         />
       )}
     </div>

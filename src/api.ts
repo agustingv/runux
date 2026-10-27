@@ -1,178 +1,59 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export type Runner = "proton" | "wine";
+import type { Task } from "./bindings/Task";
 
-export interface Config {
-  runner: Runner;
-  wineBin: string;
-  prefix: string;
-  protonPath: string | null;
-  protonData: string;
-  /** Prefix of the EA app (Wine runner), kept apart from Battle.net's. */
-  eaPrefix: string;
-  /** `STEAM_COMPAT_DATA_PATH` of the EA app (Proton runner). */
-  eaProtonData: string;
-}
+// Types shared with the Rust side, generated from it by `cargo test` (ts-rs).
+export type { AddGameRequest } from "./bindings/AddGameRequest";
+export type { Config } from "./bindings/Config";
+export type { DiscInfo } from "./bindings/DiscInfo";
+export type { DiscSession } from "./bindings/DiscSession";
+export type { EaGame } from "./bindings/EaGame";
+export type { ExternalGame } from "./bindings/ExternalGame";
+export type { ExternalGameEntry } from "./bindings/ExternalGameEntry";
+export type { ExternalKind } from "./bindings/ExternalKind";
+export type { Game } from "./bindings/Game";
+export type { GeInstall } from "./bindings/GeInstall";
+export type { LogLine } from "./bindings/LogLine";
+export type { OpticalDrive } from "./bindings/OpticalDrive";
+export type { Progress } from "./bindings/Progress";
+export type { ProtonBuild } from "./bindings/ProtonBuild";
+export type { Runner } from "./bindings/Runner";
+export type { Snapshot } from "./bindings/Snapshot";
+export type { Status } from "./bindings/Status";
+export type { TaskFinished } from "./bindings/TaskFinished";
+export type { Task };
 
-export interface ProtonBuild {
-  name: string;
-  path: string;
-  version: string | null;
-  runtime: string | null;
-  steamRoot: string;
-  /** Downloaded by the app (GE-Proton) rather than found in Steam. */
-  downloaded: boolean;
-  /** Steam Linux Runtime the build needs but that isn't installed. */
-  missingRuntime: string | null;
-}
+import type { AddGameRequest } from "./bindings/AddGameRequest";
+import type { Config } from "./bindings/Config";
+import type { DiscSession } from "./bindings/DiscSession";
+import type { ExternalGameEntry } from "./bindings/ExternalGameEntry";
+import type { GeInstall } from "./bindings/GeInstall";
+import type { LogLine } from "./bindings/LogLine";
+import type { OpticalDrive } from "./bindings/OpticalDrive";
+import type { Progress } from "./bindings/Progress";
+import type { ProtonBuild } from "./bindings/ProtonBuild";
+import type { Snapshot } from "./bindings/Snapshot";
+import type { TaskFinished } from "./bindings/TaskFinished";
 
-export interface GeInstall {
-  /** Release tag, e.g. `GE-Proton11-11`. */
-  version: string;
-  /** False when that release was already installed. */
-  updated: boolean;
-  /** Steam Linux Runtime downloaded along with it, if it was missing. */
-  runtime: string | null;
-}
-
-export interface Status {
-  runner: Runner;
-  runnerLabel: string | null;
-  runnerOk: boolean;
-  /** Why the runner can't be used, when known. */
-  runnerProblem: string | null;
-  prefixExists: boolean;
-  dxvkVersion: string | null;
-  battlenetInstalled: boolean;
-  battlenetRunning: boolean;
-  scummvmInstalled: boolean;
-  eaInstalled: boolean;
-  /** Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing. */
-  missing32bit: { command: string | null } | null;
-  eaRunning: boolean;
-  /** The EA app's in-game overlay; `null` before anyone signs in. */
-  eaOverlay: boolean | null;
-}
-
-export interface Game {
-  uid: string;
-  productCode: string;
-  name: string;
-  launchCode: string;
-  accent: string;
-  installPath: string;
-  localPath: string;
-  version: string;
-  region: string;
-  installed: boolean;
-  playable: boolean;
-  updateComplete: boolean;
-  updateProgress: number | null;
-  running: boolean;
-}
-
-export type ExternalKind = "scummvm" | "windows";
-
-export interface ExternalGame {
-  id: string;
-  name: string;
-  kind: ExternalKind;
-  path: string;
-  exe: string | null;
-  scummvmId: string | null;
-  accent: string;
-  imported: boolean;
-  /** Extra environment variables for the game's process. */
-  env: Record<string, string>;
-  running: boolean;
-}
-
-export interface EaGame {
-  id: string;
-  name: string;
-  path: string;
-  /** Content IDs it's launched by through the EA app. */
-  contentIds: string[];
-  /** Run directly when there are no content IDs. */
-  exe: string | null;
-  accent: string;
-  /** Extra environment variables, passed on through the EA app. */
-  env: Record<string, string>;
-  running: boolean;
-}
-
-/** Everything the UI shows, refreshed every few seconds. */
-export interface Snapshot {
-  status: Status;
-  games: Game[];
-  external: ExternalGame[];
-  eaGames: EaGame[];
-}
-
-export interface AddGameRequest {
-  kind: ExternalKind;
-  name: string;
-  sources: string[];
-  exe: string | null;
-}
-
-export interface OpticalDrive {
-  device: string;
-  label: string | null;
-  media: boolean;
-}
-
-export interface DiscInfo {
-  /** ISO path or optical drive device (`/dev/sr0`). */
-  source: string;
-  /** Drive letter inside the prefix, while mounted. */
-  letter: string | null;
-  label: string | null;
-  root: string | null;
-}
-
-export interface DiscSession {
-  /** All mounted at once, each in its own drive. */
-  discs: DiscInfo[];
-  /** Installers on the first disc. */
-  installers: string[];
-  driveC: string;
-  /** Executables added to the prefix since mounting, the likeliest game first. */
-  installed: string[];
-}
-
-/** Tasks of the EA app's installer and of the client itself. */
-export const EA_INSTALL_TASK = "ea-installer";
-export const EA_TASK = "ea";
+/** The tasks the UI follows by name; `satisfies` checks them against the Rust ones. */
+export const TASK = {
+  prefix: "prefix",
+  dxvk: "dxvk",
+  battlenet: "battlenet",
+  installer: "installer",
+  ea: "ea",
+  eaInstaller: "ea-installer",
+  geProton: "ge-proton",
+  import: "import",
+  discInstall: "disc-install",
+} as const satisfies Record<string, Task>;
 
 /** Task of a Battle.net game's uninstaller. */
 export const uninstallTask = (uid: string) => `uninstall:${uid}`;
 
 /** Task of a game's uninstaller run from the EA prefix. */
 export const eaUninstallTask = (id: string) => `ea-uninstall:${id}`;
-
-/** Task of the installer run from a disc. */
-export const DISC_INSTALL_TASK = "disc-install";
-
-export interface LogLine {
-  task: string;
-  line: string;
-}
-
-export interface Progress {
-  task: string;
-  downloaded: number;
-  total: number | null;
-}
-
-export interface TaskFinished {
-  task: string;
-  success: boolean;
-}
-
-/** Downloading GE-Proton from Settings. */
-export const GE_PROTON_TASK = "ge-proton";
 
 export const api = {
   getConfig: () => invoke<Config>("get_config"),
@@ -203,12 +84,12 @@ export const api = {
   openGameLogs: (key: string) => invoke<void>("open_game_logs", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),
   installGeProton: () => invoke<GeInstall>("install_ge_proton"),
-  addExternalGame: (request: AddGameRequest) => invoke<ExternalGame>("add_external_game", { request }),
+  addExternalGame: (request: AddGameRequest) => invoke<ExternalGameEntry>("add_external_game", { request }),
   removeExternalGame: (id: string) => invoke<void>("remove_external_game", { id }),
   launchExternalGame: (id: string) => invoke<void>("launch_external_game", { id }),
   openExternalFolder: (id: string) => invoke<void>("open_external_folder", { id }),
   setExternalEnv: (id: string, env: Record<string, string>) =>
-    invoke<ExternalGame>("set_external_env", { id, env }),
+    invoke<ExternalGameEntry>("set_external_env", { id, env }),
   listOpticalDrives: () => invoke<OpticalDrive[]>("list_optical_drives"),
   startDiscSession: (discs: string[]) => invoke<DiscSession>("start_disc_session", { discs }),
   changeDisc: (index: number) => invoke<DiscSession>("change_disc", { index }),

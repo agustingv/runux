@@ -1,3 +1,4 @@
+mod battlenet;
 mod config;
 mod disc;
 mod download;
@@ -5,22 +6,20 @@ mod dxvk;
 mod ea;
 mod exeicon;
 mod external;
-mod games;
 mod host;
 mod productdb;
 mod proton;
 mod store;
+mod task;
 mod wine;
 
 use config::{Config, Runner};
-use games::Game;
+use battlenet::Game;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, RunEvent, State};
-
-const INSTALLER_URL: &str =
-    "https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe";
+use ts_rs::TS;
 
 struct AppState {
     config: Mutex<Config>,
@@ -34,8 +33,9 @@ impl AppState {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 struct Status {
     runner: Runner,
     /// Wine version or Proton build name.
@@ -71,8 +71,9 @@ fn set_config(state: State<'_, AppState>, config: Config) -> Result<(), String> 
 }
 
 /// Everything the UI shows, which it asks for every few seconds.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 struct Snapshot {
     status: Status,
     games: Vec<Game>,
@@ -86,7 +87,7 @@ async fn snapshot(state: State<'_, AppState>) -> Result<Snapshot, String> {
     // Read once: every list needs it to tell what's running.
     let cmdlines = wine::running_cmdlines();
     let status = status(&cfg, &cmdlines).await;
-    let games = if status.battlenet_installed { battlenet_games(&cfg, &cmdlines)? } else { Vec::new() };
+    let games = if status.battlenet_installed { battlenet::games(&cfg, &cmdlines)? } else { Vec::new() };
     let ea_games = if status.ea_installed { ea::games(&cfg.ea(), &cmdlines) } else { Vec::new() };
     Ok(Snapshot { games, external: external::list(&cfg, &cmdlines), ea_games, status })
 }
@@ -100,8 +101,8 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
         runner_problem,
         prefix_exists: wine::prefix_exists(cfg),
         dxvk_version: dxvk::installed_version(cfg),
-        battlenet_installed: wine::battlenet_exe(cfg).is_file(),
-        battlenet_running: wine::battlenet_running(cmdlines),
+        battlenet_installed: battlenet::installed(cfg),
+        battlenet_running: battlenet::running(cmdlines),
         scummvm_installed: external::scummvm_bin().is_some(),
         ea_installed: ea::installed(&cfg.ea()),
         ea_running: ea::running(cmdlines),
@@ -112,7 +113,7 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
 
 #[tauri::command]
 async fn create_prefix(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    wine::create_prefix(&app, &state.config(), "prefix").await
+    wine::create_prefix(&app, &state.config(), task::Task::Prefix.name()).await
 }
 
 #[tauri::command]
@@ -127,47 +128,19 @@ async fn install_dxvk(app: AppHandle, state: State<'_, AppState>) -> Result<Stri
 
 #[tauri::command]
 async fn install_battlenet(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let cfg = state.config();
-    wine::require_prefix(&cfg)?;
-    wine::log(&app, "installer", "Descargando el instalador de Battle.net…");
-    let setup_path = download::fetch_to_cache(&app, "installer", INSTALLER_URL, "Battle.net-Setup.exe").await?;
-
-    wine::log(&app, "installer", "Ejecutando el instalador. Sigue los pasos en su ventana.");
-    let mut cmd = wine::command(&cfg)?;
-    cmd.arg(&setup_path)
-        .arg("--lang=esES")
-        .arg(format!("--installpath={}", wine::BATTLENET_DIR));
-    wine::spawn_logged(&app, "installer", cmd);
-    Ok(())
-}
-
-fn require_battlenet(cfg: &Config) -> Result<(), String> {
-    if wine::battlenet_exe(cfg).is_file() {
-        Ok(())
-    } else {
-        Err("Battle.net no está instalado en el prefijo".into())
-    }
+    battlenet::install(&app, &state.config()).await
 }
 
 #[tauri::command]
 fn launch_battlenet(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let cfg = state.config();
-    require_battlenet(&cfg)?;
-    if wine::battlenet_running(&wine::running_cmdlines()) {
-        return Err("Battle.net ya está abierto".into());
-    }
-    wine::prepare_battlenet_config(&cfg)?;
-    let mut cmd = wine::command(&cfg)?;
-    cmd.arg(wine::battlenet_exe(&cfg));
-    wine::spawn_logged(&app, "battlenet", cmd);
-    Ok(())
+    battlenet::launch(&app, &state.config())
 }
 
 #[tauri::command]
 async fn close_battlenet(app: AppHandle) -> Result<(), String> {
-    match wine::close_battlenet().await {
-        0 => wine::log(&app, "battlenet", "Battle.net no estaba abierto"),
-        n => wine::log(&app, "battlenet", format!("Battle.net cerrado ({n} procesos)")),
+    match battlenet::close().await {
+        0 => wine::log(&app, battlenet::TASK, "Battle.net no estaba abierto"),
+        n => wine::log(&app, battlenet::TASK, format!("Battle.net cerrado ({n} procesos)")),
     }
     Ok(())
 }
@@ -226,46 +199,17 @@ fn open_ea_prefix(state: State<'_, AppState>) -> Result<(), String> {
     xdg_open(&state.config().ea().wine_prefix())
 }
 
-fn battlenet_games(cfg: &Config, cmdlines: &[String]) -> Result<Vec<Game>, String> {
-    let Some(db) = productdb::read(&wine::product_db(cfg))? else {
-        return Ok(Vec::new());
-    };
-    let mut games: Vec<Game> = db
-        .product_installs
-        .iter()
-        .filter_map(|p| games::from_install(cfg, p, cmdlines))
-        .collect();
-    games.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(games)
-}
-
-fn battlenet_game(cfg: &Config, uid: &str) -> Result<Game, String> {
-    battlenet_games(cfg, &wine::running_cmdlines())?
-        .into_iter()
-        .find(|g| g.uid == uid)
-        .ok_or_else(|| format!("Juego desconocido: {uid}"))
-}
-
 #[tauri::command]
 fn launch_game(app: AppHandle, state: State<'_, AppState>, uid: String) -> Result<(), String> {
     let cfg = state.config();
-    require_battlenet(&cfg)?;
-    let game = battlenet_game(&cfg, &uid)?;
-    if !wine::battlenet_running(&wine::running_cmdlines()) {
-        wine::prepare_battlenet_config(&cfg)?;
-    }
-    wine::log(&app, &uid, format!("Lanzando {} ({})", game.name, game.launch_code));
-    let mut cmd = wine::command(&cfg)?;
-    cmd.arg(wine::battlenet_exe(&cfg))
-        .arg(format!("--exec=launch {}", game.launch_code));
-    wine::spawn_logged(&app, &uid, cmd);
-    Ok(())
+    battlenet::launch_game(&app, &cfg, &battlenet::find_game(&cfg, &uid, &[])?)
 }
 
 #[tauri::command]
 fn uninstall_game(app: AppHandle, state: State<'_, AppState>, uid: String) -> Result<(), String> {
     let cfg = state.config();
-    games::uninstall(&app, &cfg, &battlenet_game(&cfg, &uid)?)
+    // Running games can't be uninstalled.
+    battlenet::uninstall(&app, &cfg, &battlenet::find_game(&cfg, &uid, &wine::running_cmdlines())?)
 }
 
 #[tauri::command]
@@ -325,7 +269,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
             external::find(id).ok()?.exe?
         } else {
             // Battle.net doesn't say which executable is the game's.
-            let game = battlenet_games(&cfg, &[]).ok()?.into_iter().find(|g| g.uid == key)?;
+            let game = battlenet::find_game(&cfg, &key, &[]).ok()?;
             disc::guess_exe(Path::new(&game.local_path))?
         };
         let icon = exeicon::read(&exe)?;
@@ -337,7 +281,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
 
 #[tauri::command]
 fn open_game_folder(state: State<'_, AppState>, uid: String) -> Result<(), String> {
-    xdg_open(Path::new(&battlenet_game(&state.config(), &uid)?.local_path))
+    xdg_open(Path::new(&battlenet::find_game(&state.config(), &uid, &[])?.local_path))
 }
 
 /// Opens the folder of a game's Proton log; `key` is its task (`ea:<id>`, `ext:<id>`).

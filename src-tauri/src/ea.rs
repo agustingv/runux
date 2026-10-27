@@ -2,12 +2,14 @@
 //! disturb Battle.net's, and the games it installs.
 
 use crate::config::{self, Config};
+use crate::task::Task;
 use crate::{disc, download, external, store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::AppHandle;
+use ts_rs::TS;
 
 const INSTALLER_URL: &str =
     "https://origin-a.akamaihd.net/EA-Desktop-Client-Download/installer-releases/EAappInstaller.exe";
@@ -18,8 +20,8 @@ const CLIENT_ROOT: &str = r"C:\Program Files\Electronic Arts\EA Desktop";
 const DEFAULT_LIBRARY: &str = r"C:\Program Files\EA Games";
 
 /// Task of the client while it runs, and of its installer.
-pub const TASK: &str = "ea";
-pub const INSTALL_TASK: &str = "ea-installer";
+pub const TASK: &str = Task::Ea.name();
+const INSTALL_TASK: &str = Task::EaInstaller.name();
 
 /// `cfg` must be the EA one (`Config::ea`) in every function taking it.
 fn client_dir(cfg: &Config) -> Option<PathBuf> {
@@ -98,8 +100,9 @@ pub async fn close() -> usize {
     wine::close_processes(is_ea_process).await
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct EaGame {
     /// Slug of its folder name, unique in the library.
     pub id: String,

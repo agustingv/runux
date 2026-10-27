@@ -1,9 +1,11 @@
 use crate::store;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum Runner {
     /// Valve's Proton, run inside its Steam Linux Runtime container.
     #[default]
@@ -13,8 +15,9 @@ pub enum Runner {
 }
 
 /// Persistent launcher settings, stored as JSON in `~/.config/runux/config.json`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
+#[ts(export)]
 pub struct Config {
     pub runner: Runner,
     /// Wine binary to use: either a name on `$PATH` or an absolute path.

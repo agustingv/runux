@@ -1,6 +1,7 @@
 //! Installs the latest DXVK release into the prefix (Direct3D 8–11 over Vulkan).
 
 use crate::config::Config;
+use crate::task::Task;
 use crate::{download, wine};
 use std::path::{Component, Path};
 use tauri::AppHandle;
@@ -16,7 +17,7 @@ pub fn installed_version(cfg: &Config) -> Option<String> {
 }
 
 pub async fn install(app: &AppHandle, cfg: &Config) -> Result<String, String> {
-    const TASK: &str = "dxvk";
+    const TASK: &str = Task::Dxvk.name();
     wine::log(app, TASK, "Buscando la última versión de DXVK…");
     let release = download::latest_release(RELEASES).await?;
     let asset = release

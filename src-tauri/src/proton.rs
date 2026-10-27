@@ -2,15 +2,17 @@
 //! and the Steam Linux Runtime container each one requires. Steam itself is
 //! optional: GE-Proton runs without it.
 
+use crate::task::Task;
 use crate::{config, download, wine};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
+use ts_rs::TS;
 
 const GE_RELEASES: &str = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest";
-pub const GE_TASK: &str = "ge-proton";
+const GE_TASK: &str = Task::GeProton.name();
 
 /// A Steam Linux Runtime that Proton builds require by Steam app id, as Valve
 /// publishes it outside Steam: a tarball holding `<dir>/_v2-entry-point`.
@@ -37,8 +39,9 @@ const RUNTIMES: &[Runtime] = &[
     },
 ];
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct ProtonBuild {
     pub name: String,
     pub path: PathBuf,
@@ -54,8 +57,9 @@ pub struct ProtonBuild {
 }
 
 /// Outcome of [`install_ge`].
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct GeInstall {
     /// Release tag, e.g. `GE-Proton11-11`.
     pub version: String,

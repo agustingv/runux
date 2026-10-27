@@ -4,6 +4,7 @@
 //! mounted at once, each in its own drive.
 
 use crate::config::Config;
+use crate::task::Task;
 use crate::wine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -12,10 +13,11 @@ use std::process::Stdio;
 use std::time::Duration;
 use tauri::AppHandle;
 use tokio::process::Command;
+use ts_rs::TS;
 
 const TASK: &str = "disc";
 /// Task of the running installer; its `task-finished` event tells the UI it's done.
-pub const INSTALL_TASK: &str = "disc-install";
+const INSTALL_TASK: &str = Task::DiscInstall.name();
 const DRIVES_KEY: &str = r"HKLM\Software\Wine\Drives";
 
 #[derive(Deserialize)]
@@ -35,8 +37,9 @@ struct BlockDevice {
     size: serde_json::Value,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct OpticalDrive {
     pub device: String,
     pub label: Option<String>,
@@ -68,8 +71,9 @@ pub struct Session {
     exes_before: HashSet<PathBuf>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct DiscInfo {
     source: String,
     /// Drive letter inside the prefix, e.g. `E`, while mounted.
@@ -78,8 +82,9 @@ pub struct DiscInfo {
     root: Option<PathBuf>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "DiscSession")]
 pub struct SessionInfo {
     discs: Vec<DiscInfo>,
     /// Executables on the first disc that look like installers, best guess

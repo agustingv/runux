@@ -2,12 +2,14 @@
 
 use serde::Serialize;
 use std::path::Path;
+use ts_rs::TS;
 
 /// 32-bit graphics drivers are missing: Proton's runtime borrows them from the
 /// host, and without them 32-bit programs (Battle.net, the EA app, old games)
 /// crash as soon as DXVK fails to create a Vulkan instance.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Missing32Bit {
     /// Commands that install them on this distribution, when known.
     pub command: Option<String>,

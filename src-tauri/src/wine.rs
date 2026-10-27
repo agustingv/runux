@@ -9,16 +9,17 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
+use ts_rs::TS;
 
-pub const BATTLENET_DIR: &str = r"C:\Program Files (x86)\Battle.net";
-
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub struct LogLine {
     pub task: String,
     pub line: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub struct TaskFinished {
     pub task: String,
     pub success: bool,
@@ -246,14 +247,6 @@ pub async fn create_prefix(app: &AppHandle, cfg: &Config, task: &str) -> Result<
     Ok(())
 }
 
-pub fn battlenet_exe(cfg: &Config) -> PathBuf {
-    to_unix_path(cfg, &format!(r"{BATTLENET_DIR}\Battle.net.exe"))
-}
-
-pub fn product_db(cfg: &Config) -> PathBuf {
-    to_unix_path(cfg, r"C:\ProgramData\Battle.net\Agent\product.db")
-}
-
 /// Maps a Windows path (`C:\Foo` or `C:/Foo`) to its location inside the prefix.
 pub fn to_unix_path(cfg: &Config, win: &str) -> PathBuf {
     let win = win.replace('\\', "/");
@@ -321,49 +314,6 @@ pub fn normalize_win_path(path: &str) -> String {
     path.replace('\\', "/").trim_end_matches('/').to_lowercase()
 }
 
-pub fn battlenet_running(cmdlines: &[String]) -> bool {
-    cmdlines.iter().any(|c| c.contains("battle.net.exe"))
-}
-
-/// Battle.net, its Agent and the runner wrappers launching them. Games run as
-/// their own processes, so they are not included.
-fn is_battlenet_process(cmdline: &str) -> bool {
-    cmdline.contains("battle.net.exe") || cmdline.contains("/battle.net/agent/")
-}
-
-/// Makes Battle.net behave like a game: closing its window exits it instead of
-/// hiding it in the tray (which Wine/Proton usually can't show), and it never
-/// starts minimized. Battle.net rewrites its config on exit, so this is only
-/// applied while it is closed.
-pub fn prepare_battlenet_config(cfg: &Config) -> Result<(), String> {
-    let Ok(users) = std::fs::read_dir(cfg.wine_prefix().join("drive_c/users")) else {
-        return Ok(());
-    };
-    for user in users.flatten() {
-        let path = user.path().join("AppData/Roaming/Battle.net/Battle.net.config");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        let mut json: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-        let Some(client) = json.get_mut("Client").and_then(|c| c.as_object_mut()) else {
-            continue;
-        };
-        let mut changed = false;
-        for key in ["HideOnClose", "AutoStartMinimized"] {
-            if client.get(key).and_then(|v| v.as_str()) != Some("false") {
-                client.insert(key.into(), "false".into());
-                changed = true;
-            }
-        }
-        if changed {
-            let text = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
-            std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
-        }
-    }
-    Ok(())
-}
-
 /// PIDs terminated on purpose by `close_processes` or the launcher reaper,
 /// and when: their exit is not a failure.
 static CLOSED: Mutex<Option<HashMap<u32, Instant>>> = Mutex::new(None);
@@ -395,14 +345,9 @@ fn signal(sig: &str, pids: &[u32]) {
         .status();
 }
 
-/// Terminates every Battle.net process and waits for them to exit, forcing
-/// the stragglers after a few seconds. Returns how many were running.
-pub async fn close_battlenet() -> usize {
-    close_processes(is_battlenet_process).await
-}
-
-/// Terminates every process whose normalized command line `matches`, as
-/// `close_battlenet` does.
+/// Terminates every process whose normalized command line `matches` and
+/// waits for them to exit, forcing the stragglers after a few seconds.
+/// Returns how many were running.
 pub async fn close_processes(matches: fn(&str) -> bool) -> usize {
     let pids = matching_pids(matches);
     if pids.is_empty() {

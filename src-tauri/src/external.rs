@@ -2,6 +2,7 @@
 //! executable in the prefix. Stored in `~/.config/runux/games.json`.
 
 use crate::config::{self, Config};
+use crate::task::Task;
 use crate::{store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -9,16 +10,19 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
+use ts_rs::TS;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, rename = "ExternalKind")]
 pub enum Kind {
     Scummvm,
     Windows,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "ExternalGameEntry")]
 pub struct ExternalGame {
     pub id: String,
     pub name: String,
@@ -41,16 +45,18 @@ pub struct ExternalGame {
     pub env: BTreeMap<String, String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "ExternalGame")]
 pub struct ExternalStatus {
     #[serde(flatten)]
     pub game: ExternalGame,
     pub running: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "AddGameRequest")]
 pub struct AddRequest {
     pub kind: Kind,
     /// Empty to use the detected (ScummVM) or file name.
@@ -60,6 +66,8 @@ pub struct AddRequest {
     /// Windows executable, for `Kind::Windows`.
     pub exe: Option<PathBuf>,
 }
+
+const TASK: &str = Task::Import.name();
 
 pub(crate) const ACCENTS: &[&str] = &["#c2410c", "#7c3aed", "#0f766e", "#b91c1c", "#1d4ed8", "#a16207"];
 
@@ -170,7 +178,7 @@ async fn detect_scummvm(app: &AppHandle, dir: &Path) -> Result<(String, String),
         .map_err(|e| format!("No se pudo ejecutar ScummVM: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        wine::log(app, "import", line);
+        wine::log(app, TASK, line);
     }
     parse_detect(&text).ok_or_else(|| "ScummVM no reconoce ningún juego en esos archivos".into())
 }
@@ -178,7 +186,7 @@ async fn detect_scummvm(app: &AppHandle, dir: &Path) -> Result<(String, String),
 fn emit_progress(app: &AppHandle, done: u64, total: u64) {
     let _ = app.emit(
         "progress",
-        serde_json::json!({ "task": "import", "downloaded": done, "total": total }),
+        serde_json::json!({ "task": TASK, "downloaded": done, "total": total }),
     );
 }
 
@@ -195,10 +203,10 @@ async fn extract_isos(app: &AppHandle, isos: &[PathBuf], dest: &Path) -> Result<
     emit_progress(app, 0, total);
     for (i, (iso, size)) in isos.iter().zip(&sizes).enumerate() {
         let name = iso.file_name().unwrap_or_default().to_string_lossy();
-        wine::log(app, "import", format!("Extrayendo {name} ({}/{})", i + 1, isos.len()));
+        wine::log(app, TASK, format!("Extrayendo {name} ({}/{})", i + 1, isos.len()));
         let mut cmd = Command::new("bsdtar");
         cmd.arg("-xf").arg(iso).arg("-C").arg(dest);
-        wine::run_logged(app, "import", cmd)
+        wine::run_logged(app, TASK, cmd)
             .await
             .map_err(|e| format!("No se pudo extraer {name}: {e}"))?;
         done += size;
@@ -207,7 +215,7 @@ async fn extract_isos(app: &AppHandle, isos: &[PathBuf], dest: &Path) -> Result<
     // ISO 9660 files come out read-only, which would block removing them later.
     let mut cmd = Command::new("chmod");
     cmd.arg("-R").arg("u+w").arg(dest);
-    wine::run_logged(app, "import", cmd).await
+    wine::run_logged(app, TASK, cmd).await
 }
 
 fn is_iso(p: &Path) -> bool {
@@ -295,7 +303,7 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
     };
     games.push(game.clone());
     save(&games)?;
-    wine::log(app, "import", format!("Añadido: {}", game.name));
+    wine::log(app, TASK, format!("Añadido: {}", game.name));
     Ok(game)
 }
 

@@ -1,0 +1,5 @@
+# TypeScript types of the commands and events, generated from the Rust ones
+# by `cargo test` (ts-rs) into the frontend's src/bindings.
+[env]
+TS_RS_EXPORT_DIR = { value = "../src/bindings", relative = true }
+TS_RS_LARGE_INT = "number"

@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
+use ts_rs::TS;
 
 pub const USER_AGENT: &str = concat!("runux/", env!("CARGO_PKG_VERSION"));
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 struct Progress<'a> {
     task: &'a str,
     downloaded: u64,

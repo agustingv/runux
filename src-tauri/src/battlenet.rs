@@ -1,8 +1,111 @@
+//! Battle.net, installed and run in the main prefix, and the games it
+//! installs, read from its `product.db`.
+
 use crate::config::Config;
-use crate::productdb::ProductInstall;
-use crate::wine;
+use crate::productdb::{self, ProductInstall};
+use crate::task::Task;
+use crate::{download, wine};
 use serde::Serialize;
+use std::path::PathBuf;
 use tauri::AppHandle;
+use ts_rs::TS;
+
+const INSTALLER_URL: &str =
+    "https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe";
+const DIR: &str = r"C:\Program Files (x86)\Battle.net";
+
+/// Task of the client while it runs, and of its installer.
+pub const TASK: &str = Task::Battlenet.name();
+const INSTALL_TASK: &str = Task::Installer.name();
+
+fn exe(cfg: &Config) -> PathBuf {
+    wine::to_unix_path(cfg, &format!(r"{DIR}\Battle.net.exe"))
+}
+
+fn product_db(cfg: &Config) -> PathBuf {
+    wine::to_unix_path(cfg, r"C:\ProgramData\Battle.net\Agent\product.db")
+}
+
+pub fn installed(cfg: &Config) -> bool {
+    exe(cfg).is_file()
+}
+
+fn require_installed(cfg: &Config) -> Result<(), String> {
+    if installed(cfg) { Ok(()) } else { Err("Battle.net no está instalado en el prefijo".into()) }
+}
+
+pub fn running(cmdlines: &[String]) -> bool {
+    cmdlines.iter().any(|c| c.contains("battle.net.exe"))
+}
+
+/// Battle.net, its Agent and the runner wrappers launching them. Games run as
+/// their own processes, so they are not included.
+fn is_process(cmdline: &str) -> bool {
+    cmdline.contains("battle.net.exe") || cmdline.contains("/battle.net/agent/")
+}
+
+/// Downloads and runs the official installer; its `task-finished` event tells when it's done.
+pub async fn install(app: &AppHandle, cfg: &Config) -> Result<(), String> {
+    wine::require_prefix(cfg)?;
+    wine::log(app, INSTALL_TASK, "Descargando el instalador de Battle.net…");
+    let setup_path = download::fetch_to_cache(app, INSTALL_TASK, INSTALLER_URL, "Battle.net-Setup.exe").await?;
+    wine::log(app, INSTALL_TASK, "Ejecutando el instalador. Sigue los pasos en su ventana.");
+    let mut cmd = wine::command(cfg)?;
+    cmd.arg(&setup_path).arg("--lang=esES").arg(format!("--installpath={DIR}"));
+    wine::spawn_logged(app, INSTALL_TASK, cmd);
+    Ok(())
+}
+
+pub fn launch(app: &AppHandle, cfg: &Config) -> Result<(), String> {
+    require_installed(cfg)?;
+    if running(&wine::running_cmdlines()) {
+        return Err("Battle.net ya está abierto".into());
+    }
+    prepare_config(cfg)?;
+    let mut cmd = wine::command(cfg)?;
+    cmd.arg(exe(cfg));
+    wine::spawn_logged(app, TASK, cmd);
+    Ok(())
+}
+
+/// Closes Battle.net; returns how many of its processes were running.
+pub async fn close() -> usize {
+    wine::close_processes(is_process).await
+}
+
+/// Makes Battle.net behave like a game: closing its window exits it instead of
+/// hiding it in the tray (which Wine/Proton usually can't show), and it never
+/// starts minimized. Battle.net rewrites its config on exit, so this is only
+/// applied while it is closed.
+fn prepare_config(cfg: &Config) -> Result<(), String> {
+    let Ok(users) = std::fs::read_dir(cfg.wine_prefix().join("drive_c/users")) else {
+        return Ok(());
+    };
+    for user in users.flatten() {
+        let path = user.path().join("AppData/Roaming/Battle.net/Battle.net.config");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut json: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        let Some(client) = json.get_mut("Client").and_then(|c| c.as_object_mut()) else {
+            continue;
+        };
+        let mut changed = false;
+        for key in ["HideOnClose", "AutoStartMinimized"] {
+            if client.get(key).and_then(|v| v.as_str()) != Some("false") {
+                client.insert(key.into(), "false".into());
+                changed = true;
+            }
+        }
+        if changed {
+            let text = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+            std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
 
 struct KnownGame {
     /// `uid` or `product_code` values found in product.db.
@@ -50,8 +153,9 @@ fn lookup(uid: &str, code: &str) -> Option<&'static KnownGame> {
         .or_else(|| CATALOG.iter().find(|g| g.ids.contains(&code.as_str())))
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Game {
     pub uid: String,
     pub product_code: String,
@@ -70,7 +174,7 @@ pub struct Game {
     pub running: bool,
 }
 
-pub fn from_install(cfg: &Config, p: &ProductInstall, cmdlines: &[String]) -> Option<Game> {
+fn from_install(cfg: &Config, p: &ProductInstall, cmdlines: &[String]) -> Option<Game> {
     let uid_lc = p.uid.to_lowercase();
     if IGNORED.contains(&uid_lc.as_str()) || IGNORED.contains(&p.product_code.to_lowercase().as_str()) {
         return None;
@@ -106,6 +210,41 @@ pub fn from_install(cfg: &Config, p: &ProductInstall, cmdlines: &[String]) -> Op
         uid: p.uid.clone(),
         product_code: p.product_code.clone(),
     })
+}
+
+/// The games in `product.db`, by name; none before Battle.net has written it.
+pub fn games(cfg: &Config, cmdlines: &[String]) -> Result<Vec<Game>, String> {
+    let Some(db) = productdb::read(&product_db(cfg))? else {
+        return Ok(Vec::new());
+    };
+    let mut games: Vec<Game> = db
+        .product_installs
+        .iter()
+        .filter_map(|p| from_install(cfg, p, cmdlines))
+        .collect();
+    games.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(games)
+}
+
+/// The game `uid`; `cmdlines` tell whether it is running, if that matters.
+pub fn find_game(cfg: &Config, uid: &str, cmdlines: &[String]) -> Result<Game, String> {
+    games(cfg, cmdlines)?
+        .into_iter()
+        .find(|g| g.uid == uid)
+        .ok_or_else(|| format!("Juego desconocido: {uid}"))
+}
+
+/// Through Battle.net, which checks for updates first.
+pub fn launch_game(app: &AppHandle, cfg: &Config, game: &Game) -> Result<(), String> {
+    require_installed(cfg)?;
+    if !running(&wine::running_cmdlines()) {
+        prepare_config(cfg)?;
+    }
+    wine::log(app, &game.uid, format!("Lanzando {} ({})", game.name, game.launch_code));
+    let mut cmd = wine::command(cfg)?;
+    cmd.arg(exe(cfg)).arg(format!("--exec=launch {}", game.launch_code));
+    wine::spawn_logged(app, &game.uid, cmd);
+    Ok(())
 }
 
 /// Blizzard's own uninstaller, shared by every game; it's what the game's

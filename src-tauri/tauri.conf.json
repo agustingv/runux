@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'none'",
+      "devCsp": null
     }
   },
   "bundle": {
