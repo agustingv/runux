@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { errorMessage, type Runner } from "../api";
+import { api, errorMessage, type Runner } from "../api";
 
 /** A fix that is just an environment variable with a given value. */
 interface EnvFix {
@@ -10,7 +10,7 @@ interface EnvFix {
 }
 
 /** Fixes for problems seen with old Windows games under Wine/Proton. */
-function envFixes(runner: Runner): EnvFix[] {
+function envFixes(runner: Runner, openLogs: () => void): EnvFix[] {
   const fixes: EnvFix[] = [
     {
       symptom: "El ratón o los clics no responden en los menús",
@@ -32,8 +32,9 @@ function envFixes(runner: Runner): EnvFix[] {
     fixes.push({
       symptom: "No arranca y no sabes por qué",
       explanation: (
-        <>Guarda un registro detallado en <code>~/steam-0.log</code> que ayuda a encontrar el fallo.
-          Desactívalo después: el archivo crece mucho.</>
+        <>Guarda un registro detallado (<code>steam-0.log</code>, el nombre lo pone Proton) que ayuda a
+          encontrar el fallo. Desactívalo después: el archivo crece mucho.{" "}
+          <button className="link-btn" onClick={openLogs}>Abrir la carpeta del registro</button></>
       ),
       name: "PROTON_LOG",
       value: "1",
@@ -45,6 +46,8 @@ function envFixes(runner: Runner): EnvFix[] {
 interface Props {
   runner: Runner;
   env: Record<string, string>;
+  /** The game's task (`ea:<id>`, `ext:<id>`), which names its log folder. */
+  logKey: string;
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
   /** The EA app's in-game overlay, for EA games; `null` before signing in. */
   eaOverlay?: { enabled: boolean | null; onSet: (enabled: boolean) => Promise<void> };
@@ -76,7 +79,7 @@ function Fix({ symptom, explanation, on, onToggle }: {
 }
 
 /** Known problems by symptom, each with a switch that applies its fix. */
-export function Troubleshooting({ runner, env, onSaveEnv, eaOverlay }: Props) {
+export function Troubleshooting({ runner, env, logKey, onSaveEnv, eaOverlay }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const run = (fn: () => Promise<void>) => {
@@ -96,7 +99,7 @@ export function Troubleshooting({ runner, env, onSaveEnv, eaOverlay }: Props) {
     <div className="troubleshooting">
       <h3 className="section-title">Solución de problemas</h3>
       <ul className="fixes">
-        {envFixes(runner).map((fix) => (
+        {envFixes(runner, () => run(() => api.openGameLogs(logKey))).map((fix) => (
           <Fix
             key={fix.name}
             symptom={fix.symptom}

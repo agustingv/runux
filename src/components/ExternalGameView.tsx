@@ -62,7 +62,7 @@ export function ExternalGameView({ game, runner, launching, onPlay, onOpenFolder
           <dt>Archivos</dt>
           <dd>{game.imported ? "Importados por la app (se borran al quitar el juego)" : "Carpeta propia (no se borra al quitar el juego)"}</dd>
         </dl>
-        {game.kind === "windows" && <Troubleshooting runner={runner} env={game.env} onSaveEnv={onSaveEnv} />}
+        {game.kind === "windows" && <Troubleshooting runner={runner} env={game.env} logKey={externalKey(game.id)} onSaveEnv={onSaveEnv} />}
         <EnvEditor key={game.id} env={game.env} onSave={onSaveEnv} />
       </section>
     </div>

@@ -344,6 +344,7 @@ pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), 
             cmd
         }
     };
+    cmd.env("PROTON_LOG_DIR", wine::game_log_dir(&task));
     // Last, so they can override the runner's own (e.g. `WINEDEBUG`).
     cmd.envs(&game.env);
     wine::spawn_logged(app, &task, cmd);

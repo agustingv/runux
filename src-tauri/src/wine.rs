@@ -1,4 +1,4 @@
-use crate::config::{Config, Runner};
+use crate::config::{self, Config, Runner};
 use crate::proton::{self, ProtonBuild};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -82,12 +82,19 @@ pub fn command(cfg: &Config) -> Result<Command, String> {
                 .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", &build.steam_root)
                 .env("STEAM_COMPAT_TOOL_PATHS", tool_paths)
                 .env("SteamAppId", "0")
-                .env("SteamGameId", "0");
+                .env("SteamGameId", "0")
+                // Instead of the home folder; games get their own below it.
+                .env("PROTON_LOG_DIR", config::logs_dir());
             cmd
         }
     };
     cmd.env("WINEDEBUG", "-all").stdin(Stdio::null());
     Ok(cmd)
+}
+
+/// Proton's log folder for a game, by its task (`ea:<id>`, `ext:<id>`).
+pub fn game_log_dir(task: &str) -> PathBuf {
+    config::logs_dir().join(task.replace(':', "-"))
 }
 
 /// A command for short-lived Wine tools (`reg`…). With Proton it uses the

@@ -71,6 +71,7 @@ export function EaGameView({ game, runner, launching, eaRunning, eaOverlay, onSe
         <Troubleshooting
           runner={runner}
           env={game.env}
+          logKey={eaKey(game.id)}
           onSaveEnv={onSaveEnv}
           eaOverlay={{ enabled: eaOverlay, onSet: onSetEaOverlay }}
         />

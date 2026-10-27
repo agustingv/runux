@@ -104,6 +104,11 @@ pub fn cache_dir() -> PathBuf {
     base(dirs::cache_dir()).join(APP_DIR)
 }
 
+/// Where Proton writes its log (`steam-0.log`) when `PROTON_LOG` is set.
+pub fn logs_dir() -> PathBuf {
+    cache_dir().join("logs")
+}
+
 /// Moves the dirs of BTN Launcher to Runux's, leaving a symlink behind so
 /// anything that still holds an old path (a running wineserver, a shortcut)
 /// keeps working, and repoints the paths stored in the settings files.

@@ -339,6 +339,17 @@ fn open_game_folder(state: State<'_, AppState>, uid: String) -> Result<(), Strin
     xdg_open(Path::new(&game.local_path))
 }
 
+/// Opens the folder of a game's Proton log; `key` is its task (`ea:<id>`, `ext:<id>`).
+#[tauri::command]
+fn open_game_logs(key: String) -> Result<(), String> {
+    if !(key.starts_with("ea:") || key.starts_with("ext:")) || key.contains('/') {
+        return Err(format!("Juego desconocido: {key}"));
+    }
+    let dir = wine::game_log_dir(&key);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    xdg_open(&dir)
+}
+
 #[tauri::command]
 fn list_external_games(state: State<'_, AppState>) -> Vec<external::ExternalStatus> {
     external::list(&state.config(), &wine::running_cmdlines())
@@ -455,6 +466,7 @@ async fn reap_launchers(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     config::migrate_from_btn();
+    proton::remove_old_client_dir();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
@@ -492,6 +504,7 @@ pub fn run() {
             open_prefix,
             open_game_folder,
             game_icon,
+            open_game_logs,
             list_protons,
             install_ge_proton,
             list_external_games,

@@ -126,7 +126,12 @@ fn own_runtime(appid: &str) -> Option<PathBuf> {
 /// `STEAM_COMPAT_CLIENT_INSTALL_PATH` without Steam: Proton only copies
 /// Steam's client DLLs from it when they exist.
 fn fake_steam_root() -> PathBuf {
-    config::data_dir().join("steam")
+    config::data_dir().join("proton-client")
+}
+
+/// Removes the stand-in client dir's old name (`steam`) if it's still empty.
+pub fn remove_old_client_dir() {
+    let _ = std::fs::remove_dir(config::data_dir().join("steam"));
 }
 
 /// Finds the install dir of a Steam app (e.g. the runtime a Proton build requires).

@@ -22,6 +22,7 @@ Requisitos: Rust, las dependencias de sistema de Tauri (webkit2gtk-4.1) y Proton
 - Configuración: `~/.config/runux/`
 - Prefijos, GE-Proton y juegos: `~/.local/share/runux/`
 - Caché (instaladores): `~/.cache/runux/`
+- Registros de Proton (`PROTON_LOG=1`): `~/.cache/runux/logs/`, con una carpeta por juego
 
 Las carpetas de la versión anterior (`btn`) se mueven solas al primer arranque y queda un enlace en su lugar.
 

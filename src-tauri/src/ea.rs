@@ -423,6 +423,7 @@ pub async fn launch_game(app: &AppHandle, cfg: &Config, game: &EaGame) -> Result
         }
         (true, None) => return Err(format!("No se encuentra el ejecutable de {}", game.name)),
     }
+    cmd.env("PROTON_LOG_DIR", wine::game_log_dir(&task));
     // Last, so they can override the runner's own (e.g. `WINEDEBUG`).
     cmd.envs(&game.env);
     wine::spawn_logged(app, &task, cmd);
