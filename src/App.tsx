@@ -1,5 +1,5 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, DISC_INSTALL_TASK, eaUninstallTask, uninstallTask, type EaGame, EA_INSTALL_TASK, EA_TASK, errorMessage, GE_PROTON_TASK, events, type AddGameRequest, type Config, type ExternalGame, type Game, type LogLine, type Progress, type Status } from "./api";
 import { AddGame } from "./components/AddGame";
 import { Console } from "./components/Console";
@@ -42,15 +42,30 @@ export default function App() {
     });
   }, []);
 
+  // One refresh at a time: asking while one runs queues another after it,
+  // so slow ones don't pile up and the latest change is always picked up.
+  const refreshing = useRef(false);
+  const refreshAgain = useRef(false);
+
   const refresh = useCallback(async () => {
+    if (refreshing.current) {
+      refreshAgain.current = true;
+      return;
+    }
+    refreshing.current = true;
     try {
-      const s = await api.getStatus();
-      setStatus(s);
-      setGames(s.battlenetInstalled ? await api.listGames() : []);
-      setExternal(await api.listExternalGames());
-      setEaGames(s.eaInstalled ? await api.listEaGames() : []);
+      do {
+        refreshAgain.current = false;
+        const s = await api.snapshot();
+        setStatus(s.status);
+        setGames(s.games);
+        setExternal(s.external);
+        setEaGames(s.eaGames);
+      } while (refreshAgain.current);
     } catch (e) {
       setError(errorMessage(e));
+    } finally {
+      refreshing.current = false;
     }
   }, []);
 

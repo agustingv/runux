@@ -85,8 +85,10 @@ pub fn from_install(cfg: &Config, p: &ProductInstall, cmdlines: &[String]) -> Op
         .map(|u| u.progress);
 
     let install_path = settings.install_path;
+    // With the separator, so `…/World of Warcraft` doesn't match `…/World of Warcraft Classic`.
     let norm_path = wine::normalize_win_path(&install_path);
-    let running = !norm_path.is_empty() && cmdlines.iter().any(|c| c.contains(&norm_path));
+    let inside = format!("{norm_path}/");
+    let running = !norm_path.is_empty() && cmdlines.iter().any(|c| c.contains(&inside));
 
     Some(Game {
         name: known.map_or_else(|| p.product_code.clone(), |k| k.name.into()),
@@ -182,7 +184,10 @@ mod tests {
 
         let parsed = productdb::read(&path).unwrap().unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
-        let cmdlines = vec!["c:/program files (x86)/overwatch/overwatch.exe".to_string()];
+        let cmdlines = vec![
+            "c:/program files (x86)/overwatch/overwatch.exe ".to_string(),
+            "c:/games/mystery2/mystery.exe ".to_string(),
+        ];
         let games: Vec<Game> = parsed
             .product_installs
             .iter()
@@ -194,7 +199,7 @@ mod tests {
             names,
             [("World of Warcraft", "WoW"), ("WoW Classic", "WoWC"), ("Overwatch 2", "Pro"), ("mys", "mys")]
         );
-        assert!(games[2].running && !games[0].running);
+        assert!(games[2].running && !games[0].running && !games[3].running);
         assert_eq!(games[0].version, "11.0.5.57212");
         assert_eq!(
             games[0].local_path,

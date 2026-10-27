@@ -1,7 +1,7 @@
 use crate::config::{self, Config, Runner};
 use crate::proton::{self, ProtonBuild};
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
@@ -112,12 +112,26 @@ pub fn tool_command(cfg: &Config) -> Result<Command, String> {
     Ok(cmd)
 }
 
+/// How long the version of a wine binary is reused: the UI asks for it every
+/// few seconds, and each time would start a wine process.
+const WINE_INFO_TTL: Duration = Duration::from_secs(30);
+/// The wine binary, when it was checked, its version and whether it runs 64-bit programs.
+static WINE_INFO: Mutex<Option<(String, Instant, Option<String>, bool)>> = Mutex::new(None);
+
 /// Human-readable runner name, whether it can run Battle.net, and if not, why.
 pub async fn runner_info(cfg: &Config) -> (Option<String>, bool, Option<String>) {
     match cfg.runner {
         Runner::Wine => {
+            if let Some((bin, at, version, ok)) = WINE_INFO.lock().unwrap_or_else(|e| e.into_inner()).clone()
+                && bin == cfg.wine_bin
+                && at.elapsed() < WINE_INFO_TTL
+            {
+                return (version, ok, None);
+            }
             let version = version(cfg).await;
             let ok = version.is_some() && supports_win64(cfg);
+            *WINE_INFO.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some((cfg.wine_bin.clone(), Instant::now(), version.clone(), ok));
             (version, ok, None)
         }
         Runner::Proton => match resolve_proton(cfg) {
@@ -346,8 +360,20 @@ pub fn prepare_battlenet_config(cfg: &Config) -> Result<(), String> {
     Ok(())
 }
 
-/// PIDs terminated on purpose by `close_battlenet`: their exit is not a failure.
-static CLOSED: Mutex<Option<HashSet<u32>>> = Mutex::new(None);
+/// PIDs terminated on purpose by `close_processes` or the launcher reaper,
+/// and when: their exit is not a failure.
+static CLOSED: Mutex<Option<HashMap<u32, Instant>>> = Mutex::new(None);
+/// Long enough for a terminated child to exit and be waited for. Older
+/// entries are dropped, so a reused PID isn't mistaken for one of them.
+const CLOSED_TTL: Duration = Duration::from_secs(60);
+
+fn mark_closed(pids: &[u32]) {
+    let mut closed = CLOSED.lock().unwrap_or_else(|e| e.into_inner());
+    let closed = closed.get_or_insert_with(HashMap::new);
+    closed.retain(|_, at| at.elapsed() < CLOSED_TTL);
+    let now = Instant::now();
+    closed.extend(pids.iter().map(|&pid| (pid, now)));
+}
 
 fn matching_pids(matches: fn(&str) -> bool) -> Vec<u32> {
     processes()
@@ -378,7 +404,7 @@ pub async fn close_processes(matches: fn(&str) -> bool) -> usize {
     if pids.is_empty() {
         return 0;
     }
-    CLOSED.lock().unwrap().get_or_insert_with(HashSet::new).extend(&pids);
+    mark_closed(&pids);
     signal("-TERM", &pids);
     let deadline = Instant::now() + Duration::from_secs(8);
     loop {
@@ -387,7 +413,7 @@ pub async fn close_processes(matches: fn(&str) -> bool) -> usize {
             break;
         }
         if Instant::now() > deadline {
-            CLOSED.lock().unwrap().get_or_insert_with(HashSet::new).extend(&left);
+            mark_closed(&left);
             signal("-KILL", &left);
             break;
         }
@@ -397,7 +423,9 @@ pub async fn close_processes(matches: fn(&str) -> bool) -> usize {
 }
 
 fn was_closed(pid: Option<u32>) -> bool {
-    pid.is_some_and(|pid| CLOSED.lock().unwrap().as_mut().is_some_and(|set| set.remove(&pid)))
+    let mut closed = CLOSED.lock().unwrap_or_else(|e| e.into_inner());
+    pid.and_then(|pid| closed.as_mut()?.remove(&pid))
+        .is_some_and(|at| at.elapsed() < CLOSED_TTL)
 }
 
 /// A process as the launcher reaper sees it.
@@ -523,7 +551,7 @@ pub fn reap_launchers(cfg: &Config) -> Vec<String> {
         .collect();
     let stale = stale_launchers(cfg, &procs, now);
     for (_, chain) in &stale {
-        CLOSED.lock().unwrap().get_or_insert_with(HashSet::new).extend(chain);
+        mark_closed(chain);
         signal("-TERM", chain);
     }
     stale.into_iter().map(|(name, _)| name).collect()
@@ -543,7 +571,8 @@ fn pipe_to_log<R: AsyncRead + Unpin + Send + 'static>(app: AppHandle, task: Stri
 /// Runs a command to completion, streaming its output to the `log` event.
 pub async fn run_logged(app: &AppHandle, task: &str, mut cmd: Command) -> Result<(), String> {
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd.spawn().map_err(|e| format!("No se pudo ejecutar wine: {e}"))?;
+    let program = Path::new(cmd.as_std().get_program()).file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let mut child = cmd.spawn().map_err(|e| format!("No se pudo ejecutar {program}: {e}"))?;
     // Output readers are detached: wineserver may inherit the pipes and keep them open.
     if let Some(out) = child.stdout.take() {
         pipe_to_log(app.clone(), task.into(), out);

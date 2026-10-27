@@ -1,3 +1,4 @@
+use crate::store;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -50,19 +51,11 @@ impl Config {
     }
 
     pub fn load() -> Self {
-        std::fs::read_to_string(Self::path())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        store::load(&Self::path())
     }
 
     pub fn save(&self) -> Result<(), String> {
-        let path = Self::path();
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        }
-        let json = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        std::fs::write(path, json).map_err(|e| e.to_string())
+        store::save(&Self::path(), self)
     }
 
     /// The same settings pointed at the EA app's prefix, so everything that
@@ -140,9 +133,7 @@ pub fn migrate_from_btn() {
             continue;
         };
         if relocate(&mut json, &old_data, &data_dir()) {
-            if let Ok(text) = serde_json::to_string_pretty(&json) {
-                let _ = std::fs::write(&path, text);
-            }
+            let _ = store::save(&path, &json);
         }
     }
 }

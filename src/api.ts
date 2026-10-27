@@ -102,6 +102,14 @@ export interface EaGame {
   running: boolean;
 }
 
+/** Everything the UI shows, refreshed every few seconds. */
+export interface Snapshot {
+  status: Status;
+  games: Game[];
+  external: ExternalGame[];
+  eaGames: EaGame[];
+}
+
 export interface AddGameRequest {
   kind: ExternalKind;
   name: string;
@@ -169,7 +177,7 @@ export const GE_PROTON_TASK = "ge-proton";
 export const api = {
   getConfig: () => invoke<Config>("get_config"),
   setConfig: (config: Config) => invoke<void>("set_config", { config }),
-  getStatus: () => invoke<Status>("get_status"),
+  snapshot: () => invoke<Snapshot>("snapshot"),
   createPrefix: () => invoke<void>("create_prefix"),
   installDxvk: () => invoke<string>("install_dxvk"),
   installBattlenet: () => invoke<void>("install_battlenet"),
@@ -179,13 +187,11 @@ export const api = {
   launchEa: () => invoke<void>("launch_ea"),
   closeEa: () => invoke<void>("close_ea"),
   openEaPrefix: () => invoke<void>("open_ea_prefix"),
-  listEaGames: () => invoke<EaGame[]>("list_ea_games"),
   launchEaGame: (id: string) => invoke<void>("launch_ea_game", { id }),
   openEaGameFolder: (id: string) => invoke<void>("open_ea_game_folder", { id }),
   uninstallEaGame: (id: string) => invoke<void>("uninstall_ea_game", { id }),
   setEaOverlay: (enabled: boolean) => invoke<void>("set_ea_overlay", { enabled }),
   setEaGameEnv: (id: string, env: Record<string, string>) => invoke<void>("set_ea_game_env", { id, env }),
-  listGames: () => invoke<Game[]>("list_games"),
   launchGame: (uid: string) => invoke<void>("launch_game", { uid }),
   uninstallGame: (uid: string) => invoke<void>("uninstall_game", { uid }),
   stopWine: () => invoke<void>("stop_wine"),
@@ -197,7 +203,6 @@ export const api = {
   openGameLogs: (key: string) => invoke<void>("open_game_logs", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),
   installGeProton: () => invoke<GeInstall>("install_ge_proton"),
-  listExternalGames: () => invoke<ExternalGame[]>("list_external_games"),
   addExternalGame: (request: AddGameRequest) => invoke<ExternalGame>("add_external_game", { request }),
   removeExternalGame: (id: string) => invoke<void>("remove_external_game", { id }),
   launchExternalGame: (id: string) => invoke<void>("launch_external_game", { id }),

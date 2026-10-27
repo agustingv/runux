@@ -5,6 +5,8 @@
 use crate::{config, download, wine};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 
 const GE_RELEASES: &str = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest";
@@ -192,7 +194,30 @@ fn rank(build: &ProtonBuild) -> (u8, i64) {
     (class, -(number * 100.0) as i64)
 }
 
+/// How long a scan is reused: the UI asks for the runner every few seconds,
+/// and scanning walks every Steam library.
+const SCAN_TTL: Duration = Duration::from_secs(30);
+static SCAN: Mutex<Option<(Instant, Vec<ProtonBuild>)>> = Mutex::new(None);
+
+/// The Proton builds installed, best first; scanned at most every [`SCAN_TTL`].
 pub fn discover() -> Vec<ProtonBuild> {
+    let mut cache = SCAN.lock().unwrap_or_else(|e| e.into_inner());
+    match &*cache {
+        Some((at, builds)) if at.elapsed() < SCAN_TTL => builds.clone(),
+        _ => {
+            let builds = scan();
+            *cache = Some((Instant::now(), builds.clone()));
+            builds
+        }
+    }
+}
+
+/// Makes the next [`discover`] scan again, after builds were added.
+pub fn forget_scan() {
+    *SCAN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+fn scan() -> Vec<ProtonBuild> {
     let mut builds = Vec::new();
     let mut add = |dir: &Path, libs: &[PathBuf], root: &Path| {
         if let Some(b) = build_from_dir(dir, libs, root) {

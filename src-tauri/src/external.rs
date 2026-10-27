@@ -2,10 +2,11 @@
 //! executable in the prefix. Stored in `~/.config/runux/games.json`.
 
 use crate::config::{self, Config};
-use crate::wine;
+use crate::{store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
@@ -66,20 +67,20 @@ fn store_path() -> PathBuf {
     config::config_dir().join("games.json")
 }
 
+/// Held from loading `games.json` to saving it, so that two changes at once
+/// (adding a game while editing another) don't undo each other.
+static STORE: Mutex<()> = Mutex::new(());
+
+fn lock() -> MutexGuard<'static, ()> {
+    STORE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn load() -> Vec<ExternalGame> {
-    std::fs::read_to_string(store_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    store::load(&store_path())
 }
 
 fn save(games: &[ExternalGame]) -> Result<(), String> {
-    let path = store_path();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string_pretty(games).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    store::save(&store_path(), games)
 }
 
 pub fn find(id: &str) -> Result<ExternalGame, String> {
@@ -93,16 +94,22 @@ pub fn list(cfg: &Config, cmdlines: &[String]) -> Vec<ExternalStatus> {
     load()
         .into_iter()
         .map(|game| {
-            // ScummVM carries the game dir in `--path=`; a Windows game runs
-            // from its executable's path as Wine names it.
-            let dir = match game.kind {
-                Kind::Scummvm => game.path.to_string_lossy().to_lowercase(),
-                Kind::Windows => wine::to_win_path(cfg, &game.path),
-            };
-            let running = cmdlines.iter().any(|c| c.contains(&dir));
+            let running = cmdlines.iter().any(|c| c.contains(&running_marker(cfg, &game)));
             ExternalStatus { game, running }
         })
         .collect()
+}
+
+/// What the command line of a running game contains. ScummVM carries the
+/// game dir in `--path=`; a Windows game runs from its executable's path as
+/// Wine names it. Both end in a separator, so `C:/Games/Alive` doesn't match
+/// `C:/Games/Alive2`.
+fn running_marker(cfg: &Config, game: &ExternalGame) -> String {
+    match game.kind {
+        // Command lines end in a space, standing for each argument's NUL.
+        Kind::Scummvm => format!("--path={} ", game.path.to_string_lossy().to_lowercase()),
+        Kind::Windows => format!("{}/", wine::to_win_path(cfg, &game.path)),
+    }
 }
 
 /// `scummvm` on `$PATH`, or where Debian/Ubuntu install it (`/usr/games` may be
@@ -205,7 +212,6 @@ fn is_iso(p: &Path) -> bool {
 }
 
 pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, String> {
-    let mut games = load();
     let isos: Vec<PathBuf> = {
         let mut v: Vec<PathBuf> = req.sources.iter().filter(|p| is_iso(p)).cloned().collect();
         v.sort();
@@ -261,6 +267,10 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
             .unwrap_or_else(|| "Juego".into()),
         n => n.to_string(),
     };
+    // Loaded only now: extracting and detecting may have taken minutes, and
+    // other games may have changed meanwhile. No `await` from here on.
+    let _lock = lock();
+    let mut games = load();
     let id = unique_id(&name, &games);
     let path = if imported {
         let dest = config::data_dir().join("games").join(&id);
@@ -292,9 +302,13 @@ fn remove_dir(dir: &Path) {
 }
 
 pub fn remove(id: &str) -> Result<(), String> {
+    let _lock = lock();
     let mut games = load();
-    let game = find(id)?;
-    games.retain(|g| g.id != id);
+    let index = games
+        .iter()
+        .position(|g| g.id == id)
+        .ok_or_else(|| format!("Juego desconocido: {id}"))?;
+    let game = games.remove(index);
     save(&games)?;
     if game.imported {
         remove_dir(&game.path);
@@ -312,6 +326,7 @@ pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, 
     if let Some(bad) = env.keys().find(|k| !valid_env_name(k)) {
         return Err(format!("Nombre de variable no válido: «{bad}»"));
     }
+    let _lock = lock();
     let mut games = load();
     let game = games
         .iter_mut()
@@ -367,6 +382,28 @@ bladerunner:bladerunner        Blade Runner (Spanish)                           
             Some(("bladerunner:bladerunner".into(), "Blade Runner (Spanish)".into()))
         );
         assert_eq!(parse_detect("WARNING: no games found\n"), None);
+    }
+
+    #[test]
+    fn running_needs_the_whole_folder_name() {
+        let cfg = Config { runner: config::Runner::Wine, prefix: "/pfx".into(), ..Default::default() };
+        let game = |kind, path: &str| ExternalGame {
+            id: "x".into(),
+            name: "X".into(),
+            kind,
+            path: path.into(),
+            exe: None,
+            scummvm_id: None,
+            accent: String::new(),
+            imported: false,
+            env: BTreeMap::new(),
+        };
+        let alive = running_marker(&cfg, &game(Kind::Windows, "/pfx/drive_c/Games/Alive"));
+        assert!("c:/games/alive/alive.exe ".contains(&alive));
+        assert!(!"c:/games/alive2/alive2.exe ".contains(&alive));
+        let br = running_marker(&cfg, &game(Kind::Scummvm, "/g/BR"));
+        assert!("/usr/games/scummvm --path=/g/br bladerunner:bladerunner ".contains(&br));
+        assert!(!"/usr/games/scummvm --path=/g/br2 bladerunner:bladerunner ".contains(&br));
     }
 
     #[test]

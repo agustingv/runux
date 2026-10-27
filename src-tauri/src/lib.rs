@@ -9,6 +9,7 @@ mod games;
 mod host;
 mod productdb;
 mod proton;
+mod store;
 mod wine;
 
 use config::{Config, Runner};
@@ -63,31 +64,50 @@ fn get_config(state: State<'_, AppState>) -> Config {
 
 #[tauri::command]
 fn set_config(state: State<'_, AppState>, config: Config) -> Result<(), String> {
+    let mut current = state.config.lock().unwrap();
     config.save()?;
-    *state.config.lock().unwrap() = config;
+    *current = config;
     Ok(())
 }
 
+/// Everything the UI shows, which it asks for every few seconds.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Snapshot {
+    status: Status,
+    games: Vec<Game>,
+    external: Vec<external::ExternalStatus>,
+    ea_games: Vec<ea::EaGame>,
+}
+
 #[tauri::command]
-async fn get_status(state: State<'_, AppState>) -> Result<Status, String> {
+async fn snapshot(state: State<'_, AppState>) -> Result<Snapshot, String> {
     let cfg = state.config();
-    let (runner_label, runner_ok, runner_problem) = wine::runner_info(&cfg).await;
+    // Read once: every list needs it to tell what's running.
     let cmdlines = wine::running_cmdlines();
-    Ok(Status {
+    let status = status(&cfg, &cmdlines).await;
+    let games = if status.battlenet_installed { battlenet_games(&cfg, &cmdlines)? } else { Vec::new() };
+    let ea_games = if status.ea_installed { ea::games(&cfg.ea(), &cmdlines) } else { Vec::new() };
+    Ok(Snapshot { games, external: external::list(&cfg, &cmdlines), ea_games, status })
+}
+
+async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
+    let (runner_label, runner_ok, runner_problem) = wine::runner_info(cfg).await;
+    Status {
         runner: cfg.runner,
         runner_label,
         runner_ok,
         runner_problem,
-        prefix_exists: wine::prefix_exists(&cfg),
-        dxvk_version: dxvk::installed_version(&cfg),
-        battlenet_installed: wine::battlenet_exe(&cfg).is_file(),
-        battlenet_running: wine::battlenet_running(&cmdlines),
+        prefix_exists: wine::prefix_exists(cfg),
+        dxvk_version: dxvk::installed_version(cfg),
+        battlenet_installed: wine::battlenet_exe(cfg).is_file(),
+        battlenet_running: wine::battlenet_running(cmdlines),
         scummvm_installed: external::scummvm_bin().is_some(),
         ea_installed: ea::installed(&cfg.ea()),
-        ea_running: ea::running(&cmdlines),
+        ea_running: ea::running(cmdlines),
         ea_overlay: ea::overlay_enabled(&cfg.ea()),
         missing_32bit: host::missing_32bit_graphics(),
-    })
+    }
 }
 
 #[tauri::command]
@@ -180,11 +200,6 @@ async fn close_ea(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_ea_games(state: State<'_, AppState>) -> Vec<ea::EaGame> {
-    ea::games(&state.config().ea(), &wine::running_cmdlines())
-}
-
-#[tauri::command]
 async fn launch_ea_game(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     let cfg = state.config().ea();
     let game = ea::find_game(&cfg, &id)?;
@@ -221,33 +236,31 @@ fn open_ea_prefix(state: State<'_, AppState>) -> Result<(), String> {
     xdg_open(&state.config().ea().wine_prefix())
 }
 
-#[tauri::command]
-fn list_games(state: State<'_, AppState>) -> Result<Vec<Game>, String> {
-    battlenet_games(&state.config())
-}
-
-fn battlenet_games(cfg: &Config) -> Result<Vec<Game>, String> {
-    let Some(db) = productdb::read(&wine::product_db(&cfg))? else {
+fn battlenet_games(cfg: &Config, cmdlines: &[String]) -> Result<Vec<Game>, String> {
+    let Some(db) = productdb::read(&wine::product_db(cfg))? else {
         return Ok(Vec::new());
     };
-    let cmdlines = wine::running_cmdlines();
     let mut games: Vec<Game> = db
         .product_installs
         .iter()
-        .filter_map(|p| games::from_install(cfg, p, &cmdlines))
+        .filter_map(|p| games::from_install(cfg, p, cmdlines))
         .collect();
     games.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(games)
+}
+
+fn battlenet_game(cfg: &Config, uid: &str) -> Result<Game, String> {
+    battlenet_games(cfg, &wine::running_cmdlines())?
+        .into_iter()
+        .find(|g| g.uid == uid)
+        .ok_or_else(|| format!("Juego desconocido: {uid}"))
 }
 
 #[tauri::command]
 fn launch_game(app: AppHandle, state: State<'_, AppState>, uid: String) -> Result<(), String> {
     let cfg = state.config();
     require_battlenet(&cfg)?;
-    let game = list_games(state)?
-        .into_iter()
-        .find(|g| g.uid == uid)
-        .ok_or_else(|| format!("Juego desconocido: {uid}"))?;
+    let game = battlenet_game(&cfg, &uid)?;
     if !wine::battlenet_running(&wine::running_cmdlines()) {
         wine::prepare_battlenet_config(&cfg)?;
     }
@@ -262,11 +275,7 @@ fn launch_game(app: AppHandle, state: State<'_, AppState>, uid: String) -> Resul
 #[tauri::command]
 fn uninstall_game(app: AppHandle, state: State<'_, AppState>, uid: String) -> Result<(), String> {
     let cfg = state.config();
-    let game = list_games(state)?
-        .into_iter()
-        .find(|g| g.uid == uid)
-        .ok_or_else(|| format!("Juego desconocido: {uid}"))?;
-    games::uninstall(&app, &cfg, &game)
+    games::uninstall(&app, &cfg, &battlenet_game(&cfg, &uid)?)
 }
 
 #[tauri::command]
@@ -285,11 +294,13 @@ fn xdg_open(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("{} no existe", path.display()));
     }
-    std::process::Command::new("xdg-open")
+    let mut child = std::process::Command::new("xdg-open")
         .arg(path)
         .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Reaped, or it would linger as a zombie until the app exits.
+    std::thread::spawn(move || child.wait());
+    Ok(())
 }
 
 #[tauri::command]
@@ -297,14 +308,18 @@ fn open_prefix(state: State<'_, AppState>) -> Result<(), String> {
     xdg_open(&state.config().wine_prefix())
 }
 
+/// For Settings, which shows what is installed right now.
 #[tauri::command]
 fn list_protons() -> Vec<proton::ProtonBuild> {
+    proton::forget_scan();
     proton::discover()
 }
 
 #[tauri::command]
 async fn install_ge_proton(app: AppHandle) -> Result<proton::GeInstall, String> {
-    proton::install_ge(&app).await
+    let result = proton::install_ge(&app).await;
+    proton::forget_scan();
+    result
 }
 
 /// Data URL of the icon in a game's executable. `key` is the game's key in
@@ -320,7 +335,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
             external::find(id).ok()?.exe?
         } else {
             // Battle.net doesn't say which executable is the game's.
-            let game = battlenet_games(&cfg).ok()?.into_iter().find(|g| g.uid == key)?;
+            let game = battlenet_games(&cfg, &[]).ok()?.into_iter().find(|g| g.uid == key)?;
             disc::guess_exe(Path::new(&game.local_path))?
         };
         let icon = exeicon::read(&exe)?;
@@ -332,11 +347,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
 
 #[tauri::command]
 fn open_game_folder(state: State<'_, AppState>, uid: String) -> Result<(), String> {
-    let game = list_games(state)?
-        .into_iter()
-        .find(|g| g.uid == uid)
-        .ok_or_else(|| format!("Juego desconocido: {uid}"))?;
-    xdg_open(Path::new(&game.local_path))
+    xdg_open(Path::new(&battlenet_game(&state.config(), &uid)?.local_path))
 }
 
 /// Opens the folder of a game's Proton log; `key` is its task (`ea:<id>`, `ext:<id>`).
@@ -348,11 +359,6 @@ fn open_game_logs(key: String) -> Result<(), String> {
     let dir = wine::game_log_dir(&key);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     xdg_open(&dir)
-}
-
-#[tauri::command]
-fn list_external_games(state: State<'_, AppState>) -> Vec<external::ExternalStatus> {
-    external::list(&state.config(), &wine::running_cmdlines())
 }
 
 #[tauri::command]
@@ -481,7 +487,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_config,
-            get_status,
+            snapshot,
             create_prefix,
             install_dxvk,
             install_battlenet,
@@ -491,13 +497,11 @@ pub fn run() {
             launch_ea,
             close_ea,
             open_ea_prefix,
-            list_ea_games,
             launch_ea_game,
             set_ea_game_env,
             set_ea_overlay,
             uninstall_ea_game,
             open_ea_game_folder,
-            list_games,
             launch_game,
             uninstall_game,
             stop_wine,
@@ -507,7 +511,6 @@ pub fn run() {
             open_game_logs,
             list_protons,
             install_ge_proton,
-            list_external_games,
             add_external_game,
             remove_external_game,
             launch_external_game,
@@ -525,13 +528,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, event| {
-            // Don't leave the ISO mounted and mapped in the prefix.
+            // Don't leave the ISO mounted and mapped in the prefix. A disc
+            // operation may be finishing: wait a little for it, not forever.
             if let RunEvent::Exit = event {
                 let state = app.state::<AppState>();
-                if let Ok(mut session) = state.disc.try_lock()
-                    && let Some(session) = session.take()
-                {
-                    disc::release(&state.config(), &session);
+                for _ in 0..30 {
+                    if let Ok(mut session) = state.disc.try_lock() {
+                        if let Some(session) = session.take() {
+                            disc::release(&state.config(), &session);
+                        }
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
             }
         });

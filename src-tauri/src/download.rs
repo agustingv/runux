@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use serde::Serialize;
 use std::path::Path;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
@@ -13,9 +14,13 @@ struct Progress<'a> {
     total: Option<u64>,
 }
 
+/// Gives up on a server that stops answering instead of waiting forever. No
+/// overall limit: GE-Proton takes minutes to download on a slow line.
 pub fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
+        .connect_timeout(Duration::from_secs(20))
+        .read_timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -33,7 +38,7 @@ pub async fn fetch(app: &AppHandle, task: &str, url: &str) -> Result<Vec<u8>, St
     let mut stream = resp.bytes_stream();
     let mut last_emit = 0u64;
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
+        let chunk = chunk.map_err(|e| format!("Error descargando {url}: {e}"))?;
         data.extend_from_slice(&chunk);
         let downloaded = data.len() as u64;
         if downloaded - last_emit > 256 * 1024 || Some(downloaded) == total {
@@ -58,7 +63,7 @@ pub async fn fetch_to_file(app: &AppHandle, task: &str, url: &str, dest: &Path) 
     let mut stream = resp.bytes_stream();
     let (mut downloaded, mut last_emit) = (0u64, 0u64);
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
+        let chunk = chunk.map_err(|e| format!("Error descargando {url}: {e}"))?;
         file.write_all(&chunk).await.map_err(|e| e.to_string())?;
         downloaded += chunk.len() as u64;
         if downloaded - last_emit > 1024 * 1024 || Some(downloaded) == total {

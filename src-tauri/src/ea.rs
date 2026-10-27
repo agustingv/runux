@@ -2,7 +2,7 @@
 //! disturb Battle.net's, and the games it installs.
 
 use crate::config::{self, Config};
-use crate::{disc, download, external, wine};
+use crate::{disc, download, external, store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -344,28 +344,24 @@ fn settings_path() -> PathBuf {
 }
 
 fn load_settings() -> BTreeMap<String, GameSettings> {
-    std::fs::read_to_string(settings_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    store::load(&settings_path())
 }
+
+/// Held from loading the settings to saving them, so changes don't undo each other.
+static SETTINGS: Mutex<()> = Mutex::new(());
 
 pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<(), String> {
     if let Some(bad) = env.keys().find(|k| !external::valid_env_name(k)) {
         return Err(format!("Nombre de variable no válido: «{bad}»"));
     }
+    let _lock = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
     let mut settings = load_settings();
     if env.is_empty() {
         settings.remove(id);
     } else {
         settings.entry(id.to_string()).or_default().env = env;
     }
-    let path = settings_path();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    store::save(&settings_path(), &settings)
 }
 
 /// Environment the running client was started with by this app; `None`

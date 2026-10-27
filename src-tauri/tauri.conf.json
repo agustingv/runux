@@ -44,7 +44,8 @@
       "deb": {
         "depends": [
           "udisks2",
-          "python3"
+          "python3",
+          "libarchive-tools"
         ],
         "files": {
           "/etc/apt/sources.list.d/runux.sources": "packaging/runux.sources",
@@ -54,7 +55,8 @@
       "rpm": {
         "depends": [
           "udisks2",
-          "python3"
+          "python3",
+          "bsdtar"
         ],
         "files": {
           "/etc/yum.repos.d/runux.repo": "packaging/runux.repo",
