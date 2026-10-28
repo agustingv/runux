@@ -9,6 +9,8 @@ export type { Config } from "./bindings/Config";
 export type { DiscInfo } from "./bindings/DiscInfo";
 export type { DiscSession } from "./bindings/DiscSession";
 export type { EaGame } from "./bindings/EaGame";
+export type { EmulatorFix } from "./bindings/EmulatorFix";
+export type { EmulatorInfo } from "./bindings/EmulatorInfo";
 export type { ExternalGame } from "./bindings/ExternalGame";
 export type { ExternalGameEntry } from "./bindings/ExternalGameEntry";
 export type { ExternalKind } from "./bindings/ExternalKind";
@@ -93,6 +95,8 @@ export const api = {
   openExternalFolder: (id: string) => invoke<void>("open_external_folder", { id }),
   setExternalEnv: (id: string, env: Record<string, string>) =>
     invoke<ExternalGameEntry>("set_external_env", { id, env }),
+  setExternalSettings: (id: string, settings: Record<string, string>) =>
+    invoke<ExternalGameEntry>("set_external_settings", { id, settings }),
   listOpticalDrives: () => invoke<OpticalDrive[]>("list_optical_drives"),
   startDiscSession: (discs: string[]) => invoke<DiscSession>("start_disc_session", { discs }),
   changeDisc: (index: number) => invoke<DiscSession>("change_disc", { index }),

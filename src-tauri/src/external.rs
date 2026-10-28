@@ -1,9 +1,11 @@
-//! Games that don't come from Battle.net: run with ScummVM, or as a Windows
-//! executable in the prefix. Stored in `~/.config/runux/games.json`.
+//! Games that don't come from Battle.net: a Windows executable run in the
+//! prefix, or a game an emulator runs (see `emulator`). Stored in
+//! `~/.config/runux/games.json`.
 
 use crate::config::{self, Config};
+use crate::emulator::{self, Media};
 use crate::task::Task;
-use crate::{host, store, wine};
+use crate::{store, wine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,9 +17,11 @@ use ts_rs::TS;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, rename = "ExternalKind")]
+/// What runs the game: Wine/Proton for `Windows`, an emulator for the rest.
 pub enum Kind {
     Scummvm,
     Windows,
+    Dreamcast,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -27,11 +31,15 @@ pub struct ExternalGame {
     pub id: String,
     pub name: String,
     pub kind: Kind,
-    /// Game directory (the ScummVM path, or the folder holding the executable).
+    /// Game directory (the ScummVM path, or the folder holding the executable
+    /// or the disc image).
     pub path: PathBuf,
     /// Windows executable, for `Kind::Windows`.
     #[serde(default)]
     pub exe: Option<PathBuf>,
+    /// Disc image the emulator opens, for emulators of `Media::Image`.
+    #[serde(default)]
+    pub rom: Option<PathBuf>,
     /// ScummVM target, e.g. `bladerunner:bladerunner`.
     #[serde(default)]
     pub scummvm_id: Option<String>,
@@ -39,10 +47,15 @@ pub struct ExternalGame {
     /// Whether `path` was extracted by the launcher (and is removed with the game).
     #[serde(default)]
     pub imported: bool,
-    /// Extra environment variables for the game's process, e.g.
+    /// Extra environment variables for a Windows game's process, e.g.
     /// `WINEDLLOVERRIDES` or `PROTON_USE_WINED3D`.
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+    /// The emulator's settings for this game (`emulator::Fix::key` → value);
+    /// `None` until changed, for the emulator's defaults. `flycast` held them
+    /// when only Flycast had any.
+    #[serde(default, alias = "flycast")]
+    pub settings: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Serialize, TS)]
@@ -61,10 +74,13 @@ pub struct AddRequest {
     pub kind: Kind,
     /// Empty to use the detected (ScummVM) or file name.
     pub name: String,
-    /// ISO images to extract, or a single game directory (ScummVM).
+    /// ISO images to extract, or a single game directory, for emulators of
+    /// `Media::GameFiles`.
     pub sources: Vec<PathBuf>,
     /// Windows executable, for `Kind::Windows`.
     pub exe: Option<PathBuf>,
+    /// Disc image, for emulators of `Media::Image`.
+    pub rom: Option<PathBuf>,
 }
 
 const TASK: &str = Task::Import.name();
@@ -98,43 +114,42 @@ pub fn find(id: &str) -> Result<ExternalGame, String> {
         .ok_or_else(|| format!("Juego desconocido: {id}"))
 }
 
+/// The games, with the settings their emulators run them with.
 pub fn list(cfg: &Config, cmdlines: &[String]) -> Vec<ExternalStatus> {
     load()
         .into_iter()
-        .map(|game| {
+        .map(|mut game| {
             let running = cmdlines.iter().any(|c| c.contains(&running_marker(cfg, &game)));
+            if let Some(emu) = emulator::get(game.kind) {
+                game.settings = Some(emu.settings(&game));
+            }
             ExternalStatus { game, running }
         })
         .collect()
 }
 
-/// What the command line of a running game contains. ScummVM carries the
-/// game dir in `--path=`; a Windows game runs from its executable's path as
-/// Wine names it. Both end in a separator, so `C:/Games/Alive` doesn't match
-/// `C:/Games/Alive2`.
+/// What the command line of a running game contains. A Windows game runs
+/// from its executable's path as Wine names it, ending in a separator so
+/// `C:/Games/Alive` doesn't match `C:/Games/Alive2`; emulators say theirs.
 fn running_marker(cfg: &Config, game: &ExternalGame) -> String {
-    match game.kind {
-        // Command lines end in a space, standing for each argument's NUL.
-        Kind::Scummvm => format!("--path={} ", game.path.to_string_lossy().to_lowercase()),
-        Kind::Windows => format!("{}/", wine::to_win_path(cfg, &game.path)),
+    match emulator::get(game.kind) {
+        Some(emu) => emu.running_marker(game),
+        None => format!("{}/", wine::to_win_path(cfg, &game.path)),
     }
 }
 
-/// `scummvm` on `$PATH`, or where Debian/Ubuntu install it (`/usr/games` may be
-/// missing from `$PATH` when the app is started from the desktop).
-pub fn scummvm_bin() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path)
-        .map(|dir| dir.join("scummvm"))
-        .chain([PathBuf::from("/usr/games/scummvm")])
-        .find(|p| p.is_file())
+fn has_extension(p: &Path, extensions: &[String]) -> bool {
+    p.extension().is_some_and(|e| extensions.iter().any(|ext| e.eq_ignore_ascii_case(ext)))
 }
 
-fn scummvm() -> Result<PathBuf, String> {
-    scummvm_bin().ok_or_else(|| match host::install_hints().scummvm {
-        Some(command) => format!("ScummVM no está instalado ({command})"),
-        None => "ScummVM no está instalado".into(),
-    })
+/// The name a disc image suggests: its file name, unless that's the generic
+/// `disc.gdi` of GD-ROM dumps, where the folder names the game.
+fn image_name(rom: &Path) -> Option<String> {
+    let stem = rom.file_stem()?.to_string_lossy();
+    if stem.eq_ignore_ascii_case("disc") {
+        return Some(rom.parent()?.file_name()?.to_string_lossy().into());
+    }
+    Some(stem.into())
 }
 
 pub(crate) fn slug(name: &str) -> String {
@@ -156,34 +171,6 @@ fn unique_id(name: &str, games: &[ExternalGame]) -> String {
         n += 1;
     }
     id
-}
-
-/// Parses `scummvm --detect` output: a table whose dashed rule gives the column widths.
-fn parse_detect(output: &str) -> Option<(String, String)> {
-    let mut lines = output.lines();
-    let rule = lines.by_ref().find(|l| l.starts_with("---"))?;
-    let widths: Vec<usize> = rule.split(' ').map(str::len).collect();
-    let row = lines.find(|l| !l.trim().is_empty())?;
-    let id_end = (*widths.first()?).min(row.len());
-    let desc_start = (id_end + 1).min(row.len());
-    let desc_end = (desc_start + widths.get(1)?).min(row.len());
-    let id = row.get(..id_end)?.trim();
-    let desc = row.get(desc_start..desc_end).or_else(|| row.get(desc_start..))?.trim();
-    (!id.is_empty()).then(|| (id.to_string(), desc.to_string()))
-}
-
-async fn detect_scummvm(app: &AppHandle, dir: &Path) -> Result<(String, String), String> {
-    let out = Command::new(scummvm()?)
-        .arg("--detect")
-        .arg(format!("--path={}", dir.display()))
-        .output()
-        .await
-        .map_err(|e| format!("No se pudo ejecutar ScummVM: {e}"))?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        wine::log(app, TASK, line);
-    }
-    parse_detect(&text).ok_or_else(|| "ScummVM no reconoce ningún juego en esos archivos".into())
 }
 
 fn emit_progress(app: &AppHandle, done: u64, total: u64) {
@@ -234,21 +221,31 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
     if !isos.is_empty() && isos.len() != req.sources.len() {
         return Err("Elige solo imágenes ISO, o solo una carpeta".into());
     }
-    if req.kind == Kind::Scummvm {
-        scummvm()?;
+    let emu = emulator::get(req.kind);
+    // Fail early, before extracting anything, when the program is missing.
+    if let Some(emu) = emu {
+        emu.require()?;
     }
 
-    let (path, imported) = match (req.kind, isos.is_empty()) {
-        (Kind::Windows, _) => {
+    let (path, imported) = match emu.map(|e| (e, e.media())) {
+        None => {
             let exe = req.exe.as_ref().ok_or("Elige el ejecutable del juego")?;
             let dir = exe.parent().ok_or("Ruta de ejecutable no válida")?;
             (dir.to_path_buf(), false)
         }
-        (Kind::Scummvm, true) => match req.sources.as_slice() {
+        Some((emu, Media::Image { extensions })) => {
+            let rom = req.rom.as_ref().ok_or("Elige la imagen del disco del juego")?;
+            if !has_extension(rom, &extensions) {
+                return Err(format!("{} abre imágenes {}", emu.program(), extensions.join(", ")));
+            }
+            let dir = rom.parent().ok_or("Ruta de imagen no válida")?;
+            (dir.to_path_buf(), false)
+        }
+        Some((_, Media::GameFiles)) if isos.is_empty() => match req.sources.as_slice() {
             [dir] if dir.is_dir() => (dir.clone(), false),
             _ => return Err("Elige las imágenes ISO del juego o su carpeta".into()),
         },
-        (Kind::Scummvm, false) => {
+        Some((_, Media::GameFiles)) => {
             // Renamed after the game's id once the name is known.
             let stamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -263,7 +260,7 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
     };
 
     let (scummvm_id, detected) = match req.kind {
-        Kind::Scummvm => match detect_scummvm(app, &path).await {
+        Kind::Scummvm => match emulator::detect_scummvm(app, &path).await {
             Ok((id, desc)) => (Some(id), Some(desc)),
             Err(e) => {
                 if imported {
@@ -272,7 +269,7 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
                 return Err(e);
             }
         },
-        Kind::Windows => (None, None),
+        _ => (None, req.rom.as_deref().and_then(image_name)),
     };
 
     let name = match req.name.trim() {
@@ -300,9 +297,11 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
         kind: req.kind,
         path,
         exe: req.exe,
+        rom: req.rom,
         scummvm_id,
         imported,
         env: BTreeMap::new(),
+        settings: None,
     };
     games.push(game.clone());
     save(&games)?;
@@ -344,59 +343,51 @@ pub(crate) fn check_env(env: &BTreeMap<String, String>) -> Result<(), String> {
     }
 }
 
-pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, String> {
-    check_env(&env)?;
+/// Saves a change to one game, holding the store lock throughout.
+fn update(id: &str, change: impl FnOnce(&mut ExternalGame)) -> Result<ExternalGame, String> {
     let _lock = lock();
     let mut games = load();
     let game = games
         .iter_mut()
         .find(|g| g.id == id)
         .ok_or_else(|| format!("Juego desconocido: {id}"))?;
-    game.env = env;
+    change(game);
     let game = game.clone();
     save(&games)?;
     Ok(game)
 }
 
+pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, String> {
+    check_env(&env)?;
+    update(id, |game| game.env = env)
+}
+
+pub fn set_settings(id: &str, settings: BTreeMap<String, String>) -> Result<ExternalGame, String> {
+    let emu = emulator::get(find(id)?.kind).ok_or("Este juego no usa un emulador")?;
+    for (key, value) in &settings {
+        emu.check_setting(key, value)?;
+    }
+    update(id, |game| game.settings = Some(settings))
+}
+
 pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), String> {
     let task = format!("ext:{}", game.id);
     wine::log(app, &task, format!("Lanzando {}", game.name));
-    let cmd = match game.kind {
-        Kind::Scummvm => {
-            let bin = scummvm()?;
-            let target = game.scummvm_id.as_deref().ok_or("Falta el identificador de ScummVM")?;
-            let mut cmd = Command::new(bin);
-            cmd.arg(format!("--path={}", game.path.display())).arg(target);
-            cmd
-        }
-        Kind::Windows => {
+    match emulator::get(game.kind) {
+        Some(emu) => wine::spawn_logged(app, &task, emu.command(game, &emu.settings(game))?),
+        None => {
             let exe = game.exe.as_ref().ok_or("Falta el ejecutable del juego")?;
             let mut cmd = wine::command(cfg)?;
             cmd.arg(exe).current_dir(&game.path);
-            cmd
+            wine::spawn_game(app, &task, cmd, &game.env);
         }
-    };
-    wine::spawn_game(app, &task, cmd, &game.env);
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_detect_table() {
-        let out = "\
-GameID                         Description                                                Full Path
------------------------------- ---------------------------------------------------------- ---------
-bladerunner:bladerunner        Blade Runner (Spanish)                                     /g/br
-";
-        assert_eq!(
-            parse_detect(out),
-            Some(("bladerunner:bladerunner".into(), "Blade Runner (Spanish)".into()))
-        );
-        assert_eq!(parse_detect("WARNING: no games found\n"), None);
-    }
 
     #[test]
     fn running_needs_the_whole_folder_name() {
@@ -407,10 +398,12 @@ bladerunner:bladerunner        Blade Runner (Spanish)                           
             kind,
             path: path.into(),
             exe: None,
+            rom: None,
             scummvm_id: None,
             accent: String::new(),
             imported: false,
             env: BTreeMap::new(),
+            settings: None,
         };
         let alive = running_marker(&cfg, &game(Kind::Windows, "/pfx/drive_c/Games/Alive"));
         assert!("c:/games/alive/alive.exe ".contains(&alive));
@@ -418,6 +411,31 @@ bladerunner:bladerunner        Blade Runner (Spanish)                           
         let br = running_marker(&cfg, &game(Kind::Scummvm, "/g/BR"));
         assert!("/usr/games/scummvm --path=/g/br bladerunner:bladerunner ".contains(&br));
         assert!(!"/usr/games/scummvm --path=/g/br2 bladerunner:bladerunner ".contains(&br));
+        let sonic = running_marker(&cfg, &ExternalGame { rom: Some("/g/Sonic/disc.gdi".into()), ..game(Kind::Dreamcast, "/g/Sonic") });
+        assert!("flatpak run org.flycast.flycast /g/sonic/disc.gdi ".contains(&sonic));
+        assert!(!"flycast /g/sonic/disc.gdi.bak ".contains(&sonic));
+    }
+
+    #[test]
+    fn recognizes_images_and_their_names() {
+        let dreamcast = ["gdi".to_string(), "cdi".to_string()];
+        assert!(has_extension(Path::new("/g/Crazy Taxi.CDI"), &dreamcast));
+        assert!(has_extension(Path::new("/g/Shenmue/disc.gdi"), &dreamcast));
+        assert!(!has_extension(Path::new("/g/game.iso"), &dreamcast));
+        assert_eq!(image_name(Path::new("/g/Crazy Taxi.cdi")).as_deref(), Some("Crazy Taxi"));
+        assert_eq!(image_name(Path::new("/g/Shenmue/disc.gdi")).as_deref(), Some("Shenmue"));
+    }
+
+    #[test]
+    fn keeps_settings_saved_by_earlier_versions() {
+        let json = r##"{"id":"s","name":"S","kind":"dreamcast","path":"/g","accent":"#000"}"##;
+        let game: ExternalGame = serde_json::from_str(json).unwrap();
+        assert_eq!(game.settings, None);
+        let off: ExternalGame = serde_json::from_str(&json.replace("}", r#","flycast":{}}"#)).unwrap();
+        assert_eq!(off.settings, Some(BTreeMap::new()));
+        let emu = emulator::get(Kind::Dreamcast).unwrap();
+        assert_eq!(emu.settings(&game), emu.default_settings());
+        assert!(emu.settings(&off).is_empty());
     }
 
     #[test]

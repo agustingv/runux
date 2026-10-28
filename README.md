@@ -4,7 +4,8 @@ Lanzador de juegos de Windows para Linux hecho con Tauri 2 + React.
 
 Instala y abre Battle.net y la EA app, cada una en su propio prefijo de Wine o Proton,
 detecta los juegos que instalan y los lanza desde la app. También añade juegos sueltos
-(ejecutables de Windows, ScummVM) e instala desde ISO o DVD.
+(ejecutables de Windows, o juegos de emuladores: ScummVM, Dreamcast con Flycast) e instala
+desde ISO o DVD.
 
 Proton no necesita Steam: la app puede descargar GE-Proton desde Ajustes.
 
@@ -16,6 +17,15 @@ npm run tauri dev
 ```
 
 Requisitos: Rust, las dependencias de sistema de Tauri (webkit2gtk-4.1) y Proton o Wine de 64 bits.
+
+## Emuladores
+
+Cada emulador está en `src-tauri/src/emulator/` e implementa el trait `Emulator`: cómo se
+detecta e instala, qué abre (una imagen de disco o los archivos del juego), cómo lanza un
+juego y qué ajustes arreglan problemas conocidos. La interfaz lo muestra todo a partir de
+esa información: el apartado de su sistema en la barra lateral, su opción al añadir un juego
+y sus interruptores en «Solución de problemas». Para añadir uno: una variante en
+`external::Kind`, un módulo que implemente `Emulator` y su entrada en `emulator::ALL`.
 
 ## Rutas
 

@@ -3,13 +3,18 @@ import type { ExternalKind } from "./ExternalKind";
 
 export type ExternalGameEntry = { id: string, name: string, kind: ExternalKind, 
 /**
- * Game directory (the ScummVM path, or the folder holding the executable).
+ * Game directory (the ScummVM path, or the folder holding the executable
+ * or the disc image).
  */
 path: string, 
 /**
  * Windows executable, for `Kind::Windows`.
  */
 exe: string | null, 
+/**
+ * Disc image the emulator opens, for emulators of `Media::Image`.
+ */
+rom: string | null, 
 /**
  * ScummVM target, e.g. `bladerunner:bladerunner`.
  */
@@ -19,7 +24,13 @@ scummvmId: string | null, accent: string,
  */
 imported: boolean, 
 /**
- * Extra environment variables for the game's process, e.g.
+ * Extra environment variables for a Windows game's process, e.g.
  * `WINEDLLOVERRIDES` or `PROTON_USE_WINED3D`.
  */
-env: { [key in string]: string }, };
+env: { [key in string]: string }, 
+/**
+ * The emulator's settings for this game (`emulator::Fix::key` → value);
+ * `None` until changed, for the emulator's defaults. `flycast` held them
+ * when only Flycast had any.
+ */
+settings: { [key in string]: string } | null, };

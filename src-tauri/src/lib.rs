@@ -4,6 +4,7 @@ mod disc;
 mod download;
 mod dxvk;
 mod ea;
+mod emulator;
 mod exeicon;
 mod external;
 mod host;
@@ -48,7 +49,8 @@ struct Status {
     dxvk_version: Option<String>,
     battlenet_installed: bool,
     battlenet_running: bool,
-    scummvm_installed: bool,
+    /// The emulators, installed or not.
+    emulators: Vec<emulator::EmulatorInfo>,
     ea_installed: bool,
     ea_running: bool,
     /// The EA app's in-game overlay; `None` before anyone signs in.
@@ -104,7 +106,7 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
         dxvk_version: dxvk::installed_version(cfg),
         battlenet_installed: battlenet::installed(cfg),
         battlenet_running: battlenet::running(cmdlines),
-        scummvm_installed: external::scummvm_bin().is_some(),
+        emulators: emulator::infos(),
         ea_installed: ea::installed(&cfg.ea()),
         ea_running: ea::running(cmdlines),
         ea_overlay: ea::overlay_enabled(&cfg.ea()),
@@ -332,6 +334,14 @@ fn set_external_env(
 }
 
 #[tauri::command]
+fn set_external_settings(
+    id: String,
+    settings: std::collections::BTreeMap<String, String>,
+) -> Result<external::ExternalGame, String> {
+    external::set_settings(&id, settings)
+}
+
+#[tauri::command]
 fn open_external_folder(id: String) -> Result<(), String> {
     xdg_open(&external::find(&id)?.path)
 }
@@ -465,6 +475,7 @@ pub fn run() {
             launch_external_game,
             open_external_folder,
             set_external_env,
+            set_external_settings,
             list_optical_drives,
             list_isos,
             start_disc_session,

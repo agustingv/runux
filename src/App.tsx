@@ -120,6 +120,7 @@ export default function App() {
         <Sidebar
           games={games}
           external={external}
+          emulators={status?.emulators ?? []}
           eaGames={eaGames}
           selected={selected}
           onSelect={setSelected}
@@ -159,6 +160,7 @@ export default function App() {
           ) : ext ? (
             <ExternalGameView
               game={ext}
+              emulator={status.emulators.find((e) => e.kind === ext.kind)}
               runner={status.runner}
               launching={externalKey(ext.id) in launching}
               onPlay={() => play(externalKey(ext.id), () => api.launchExternalGame(ext.id))}
@@ -166,6 +168,10 @@ export default function App() {
               onRemove={() => removeGame(ext)}
               onSaveEnv={async (env) => {
                 await api.setExternalEnv(ext.id, env);
+                refresh();
+              }}
+              onSaveSettings={async (settings) => {
+                await api.setExternalSettings(ext.id, settings);
                 refresh();
               }}
             />
@@ -229,8 +235,7 @@ export default function App() {
 
       {showAddGame && status && (
         <AddGame
-          scummvmInstalled={status.scummvmInstalled}
-          scummvmHint={status.installHints.scummvm}
+          emulators={status.emulators}
           busy={busy.has(TASK.import)}
           installing={busy.has(TASK.discInstall)}
           progress={progress[TASK.import]}
