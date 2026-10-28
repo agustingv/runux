@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { type EaGame, type ExternalGame, type Game, type Progress, type Status } from "../api";
 import { Missing32Bit } from "./Missing32Bit";
 import { GameTile } from "./GameParts";
@@ -163,16 +164,20 @@ export function Home({
         </>
       )}
 
-      {external.length > 0 && (
-        <>
-          <h3 className="section-title">Otros juegos</h3>
-          <div className="grid">
-            {external.map((g) => (
-              <GameTile key={g.id} gameKey={externalKey(g.id)} name={g.name} accent={g.accent} ready={g.kind === "windows"} state={readiness(g)} onClick={() => onSelect(externalKey(g.id))} />
-            ))}
-          </div>
-        </>
-      )}
+      {/* Windows games, then emulated ones under their system. */}
+      {[{ kind: "windows", title: "Otros juegos" }, ...status.emulators.map((e) => ({ kind: e.kind, title: e.system }))].map(({ kind, title }) => {
+        const list = external.filter((g) => g.kind === kind);
+        return list.length > 0 && (
+          <Fragment key={kind}>
+            <h3 className="section-title">{title}</h3>
+            <div className="grid">
+              {list.map((g) => (
+                <GameTile key={g.id} gameKey={externalKey(g.id)} name={g.name} accent={g.accent} ready={g.kind === "windows"} state={readiness(g)} onClick={() => onSelect(externalKey(g.id))} />
+              ))}
+            </div>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

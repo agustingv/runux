@@ -1,13 +1,11 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, naturalSort, type AddGameRequest, type DiscSession, type ExternalKind, type OpticalDrive, type Progress } from "../api";
+import { api, errorMessage, naturalSort, type AddGameRequest, type DiscSession, type EmulatorInfo, type ExternalKind, type OpticalDrive, type Progress } from "../api";
 import { CloseIcon } from "../icons";
 import { ProgressBar } from "./Setup";
 
 interface Props {
-  scummvmInstalled: boolean;
-  /** The command that installs ScummVM on this distribution, if known. */
-  scummvmHint: string | null;
+  emulators: EmulatorInfo[];
   busy: boolean;
   /** An installer launched from a disc is running. */
   installing: boolean;
@@ -43,12 +41,15 @@ function Steps({ current }: { current: number }) {
   );
 }
 
-export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progress, onAdd, onInstall, onClose }: Props) {
-  const [kind, setKind] = useState<ExternalKind>("scummvm");
+export function AddGame({ emulators, busy, installing, progress, onAdd, onInstall, onClose }: Props) {
+  const [kind, setKind] = useState<ExternalKind>("windows");
+  /** The system last chosen, to come back to it from Windows. */
+  const [emulatorKind, setEmulatorKind] = useState<ExternalKind>(emulators[0]?.kind ?? "windows");
   const [winSource, setWinSource] = useState<WindowsSource>("exe");
   const [name, setName] = useState("");
   const [sources, setSources] = useState<string[]>([]);
   const [exe, setExe] = useState<string | null>(null);
+  const [rom, setRom] = useState<string | null>(null);
   const [discs, setDiscs] = useState<string[]>([]);
   const [drives, setDrives] = useState<OpticalDrive[]>([]);
   const [session, setSession] = useState<DiscSession | null>(null);
@@ -59,7 +60,12 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
   const [installDone, setInstallDone] = useState(false);
   const wasInstalling = useRef(false);
 
+  /** What runs the game; `undefined` for Windows games. */
+  const emulator = emulators.find((e) => e.kind === kind);
+  const media = emulator?.media;
   const discMode = kind === "windows" && winSource === "disc";
+  /** Why the chosen drive's disc can't be installed from, e.g. an Xbox disc. */
+  const unusable = drives.find((d) => d.device === discs[0])?.unusable ?? null;
   const step = !session ? 0 : installDone ? 2 : 1;
 
   useEffect(() => {
@@ -83,6 +89,22 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
       filters: [{ name: "Ejecutables de Windows", extensions: ["exe", "EXE"] }],
     });
     if (picked) setExe(picked);
+  };
+  const pickRom = async () => {
+    if (media?.type !== "file") return;
+    const extensions = [...media.extensions, ...media.extensions.map((e) => e.toUpperCase())];
+    const picked = await open({ filters: [{ name: `Juegos de ${emulator!.system}`, extensions }] });
+    if (picked) setRom(picked);
+  };
+  const pickRomFolder = async () => {
+    const picked = await open({ directory: true });
+    if (picked) setRom(picked);
+  };
+  const chooseEmulator = (k: ExternalKind) => {
+    setEmulatorKind(k);
+    setKind(k);
+    setRom(null);
+    setSources([]);
   };
   const pickDiscIsos = async () => {
     const picked = await open({ multiple: true, filters: [{ name: "Imágenes ISO", extensions: ["iso", "ISO"] }] });
@@ -160,7 +182,9 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
   const waiting = installing && !installDone;
   const locked = busy || waiting || discBusy;
   const close = locked ? undefined : onClose;
-  const ready = kind === "scummvm" ? scummvmInstalled && sources.length > 0 : exe !== null && !waiting;
+  const ready =
+    emulator ? emulator.installed && (media?.type === "file" ? rom !== null : sources.length > 0)
+    : exe !== null && !waiting;
   // `game.exe` says little; the folder it was installed to names the game.
   const suggestedName = discMode && exe ? folderName(exe) : "";
 
@@ -168,8 +192,9 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
     onAdd({
       kind,
       name: name.trim() || suggestedName,
-      sources: kind === "scummvm" ? sources : [],
-      exe: kind === "windows" ? exe : null,
+      sources: media?.type === "gameFiles" ? sources : [],
+      exe: emulator ? null : exe,
+      rom: media?.type === "file" ? rom : null,
     });
 
   const nameField = (
@@ -178,7 +203,12 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder={suggestedName || (kind === "scummvm" ? "Automático (lo detecta ScummVM)" : "Nombre del ejecutable")}
+        placeholder={
+          suggestedName ||
+          (media?.type === "gameFiles" ? `Automático (lo detecta ${emulator!.program})`
+            : media?.type === "file" ? "Automático (del juego o del archivo)"
+            : "Nombre del ejecutable")
+        }
         disabled={busy}
       />
     </label>
@@ -191,15 +221,22 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
   let body: React.ReactNode;
   let primary: React.ReactNode;
 
-  if (kind === "scummvm") {
+  const notInstalled = emulator && (
+    <>
+      {!emulator.installed && (
+        <p className="note">
+          {emulator.program} no está instalado.{" "}
+          {emulator.installHint ? <>Instálalo con <code>{emulator.installHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
+        </p>
+      )}
+      {emulator.setup && <p className="muted small">{emulator.setup}</p>}
+    </>
+  );
+
+  if (media?.type === "gameFiles") {
     body = (
       <>
-        {!scummvmInstalled && (
-          <p className="note">
-            ScummVM no está instalado.{" "}
-            {scummvmHint ? <>Instálalo con <code>{scummvmHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
-          </p>
-        )}
+        {notInstalled}
         <label>
           Archivos del juego
           <small className="muted">
@@ -210,6 +247,22 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
             <button className="ghost-btn" onClick={pickFolder} disabled={busy}>Elegir carpeta…</button>
           </div>
           {sources.length > 0 && <small className="mono">{sources.map(fileName).join(", ")}</small>}
+        </label>
+        {nameField}
+      </>
+    );
+  } else if (media?.type === "file") {
+    body = (
+      <>
+        {notInstalled}
+        <label>
+          {media.label}
+          <small className="muted">{media.help}</small>
+          <div className="modal-row">
+            {media.folder && <button className="ghost-btn" onClick={pickRomFolder} disabled={busy}>Elegir carpeta…</button>}
+            <button className="ghost-btn" onClick={pickRom} disabled={busy}>{media.folder ? "Elegir archivo…" : "Elegir imagen…"}</button>
+          </div>
+          {rom && <small className="mono">{rom}</small>}
         </label>
         {nameField}
       </>
@@ -230,39 +283,42 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
     );
   } else if (step === 0) {
     body = (
-      <label>
-        ¿Dónde está el juego?
-        <small className="muted">
-          Las imágenes ISO del juego (una carpeta con todas, o elegidas a mano) o el DVD del lector.
-          Se montan a la vez, cada una como una unidad de CD dentro del prefijo.
-        </small>
-        <div className="modal-row wrap">
-          <button className="ghost-btn" onClick={pickDiscFolder} disabled={discBusy}>Elegir carpeta…</button>
-          <button className="ghost-btn" onClick={pickDiscIsos} disabled={discBusy}>Elegir ISOs…</button>
-          {drives.map((d) => (
-            <button
-              key={d.device}
-              className={discs[0] === d.device ? "ghost-btn active" : "ghost-btn"}
-              onClick={() => setDiscs([d.device])}
-              disabled={discBusy || !d.media}
-              title={d.media ? d.device : `${d.device}: sin disco`}
-            >
-              DVD{d.label ? `: ${d.label}` : d.media ? "" : " (vacío)"}
-            </button>
-          ))}
-        </div>
-        {discs.length > 0 && (
-          <ol className="disc-list mono">
-            {discs.map((d) => <li key={d}>{isDevice(d) ? "DVD" : fileName(d)}</li>)}
-          </ol>
-        )}
-      </label>
+      <>
+        <label>
+          ¿Dónde está el juego?
+          <small className="muted">
+            Las imágenes ISO del juego (una carpeta con todas, o elegidas a mano) o el DVD del lector.
+            Se montan a la vez, cada una como una unidad de CD dentro del prefijo.
+          </small>
+          <div className="modal-row wrap">
+            <button className="ghost-btn" onClick={pickDiscFolder} disabled={discBusy}>Elegir carpeta…</button>
+            <button className="ghost-btn" onClick={pickDiscIsos} disabled={discBusy}>Elegir ISOs…</button>
+            {drives.map((d) => (
+              <button
+                key={d.device}
+                className={discs[0] === d.device ? "ghost-btn active" : "ghost-btn"}
+                onClick={() => setDiscs([d.device])}
+                disabled={discBusy || !d.media}
+                title={d.media ? d.device : `${d.device}: sin disco`}
+              >
+                DVD{d.label ? `: ${d.label}` : d.media ? "" : " (vacío)"}
+              </button>
+            ))}
+          </div>
+          {discs.length > 0 && (
+            <ol className="disc-list mono">
+              {discs.map((d) => <li key={d}>{isDevice(d) ? "DVD" : fileName(d)}</li>)}
+            </ol>
+          )}
+        </label>
+        {unusable && <p className="note">{unusable}</p>}
+      </>
     );
     primary = (
       <button
         className="play-btn small"
         onClick={() => discOp(() => api.startDiscSession(discs))}
-        disabled={discs.length === 0 || discBusy}
+        disabled={discs.length === 0 || discBusy || unusable !== null}
       >
         {discBusy ? "Montando…" : discs.length > 1 ? `Montar ${discs.length} discos` : "Montar"}
       </button>
@@ -383,19 +439,31 @@ export function AddGame({ scummvmInstalled, scummvmHint, busy, installing, progr
         ) : (
           <>
             <div className="segmented" role="radiogroup" aria-label="Motor">
-              {(["scummvm", "windows"] as ExternalKind[]).map((k) => (
+              {[{ emu: false, label: "Windows (Wine/Proton)" }, { emu: true, label: "Emulador" }].map(({ emu, label }) => (
                 <button
-                  key={k}
+                  key={label}
                   role="radio"
-                  aria-checked={kind === k}
-                  className={kind === k ? "active" : ""}
-                  onClick={() => setKind(k)}
-                  disabled={locked}
+                  aria-checked={!!emulator === emu}
+                  className={!!emulator === emu ? "active" : ""}
+                  onClick={() => (emu ? chooseEmulator(emulatorKind) : setKind("windows"))}
+                  disabled={locked || (emu && emulators.length === 0)}
                 >
-                  {k === "scummvm" ? "ScummVM" : "Windows (Wine/Proton)"}
+                  {label}
                 </button>
               ))}
             </div>
+            {emulator && (
+              <label>
+                Sistema
+                <select value={kind} onChange={(e) => chooseEmulator(e.target.value as ExternalKind)} disabled={locked}>
+                  {emulators.map((e) => (
+                    <option key={e.kind} value={e.kind}>
+                      {e.system === e.program ? e.program : `${e.system} (${e.program})`}{e.installed ? "" : " — no instalado"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {kind === "windows" && (
               <div className="segmented" role="radiogroup" aria-label="Origen">
                 {(["exe", "disc"] as WindowsSource[]).map((s) => (

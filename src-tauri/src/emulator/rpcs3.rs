@@ -1,0 +1,180 @@
+//! RPCS3, the PlayStation 3 emulator.
+
+use super::program::{Install, Program};
+use super::{image_name, option_args, rom, Emulator, Fix, Media};
+use crate::external::{ExternalGame, Kind};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use tokio::process::Command;
+
+const PROGRAM: Program = Program { bins: &["rpcs3"], paths: &[], flatpak: Some("net.rpcs3.RPCS3") };
+
+pub struct Rpcs3;
+
+/// Opens `rom`, in `dir`, without RPCS3's game list, so it exits with the
+/// game, and with `settings` as `--options`.
+fn command(install: &Install, dir: &Path, rom: &Path, settings: &BTreeMap<String, String>) -> Command {
+    let mut cmd = install.command(&[dir]);
+    cmd.arg("--no-gui").args(option_args(settings)).arg(rom);
+    cmd
+}
+
+/// The folder holding a whole game, from its `EBOOT.BIN`: a disc game's is
+/// in `<game>/PS3_GAME/USRDIR/`, a PSN game's in `<game>/USRDIR/`.
+fn game_root(rom: &Path) -> PathBuf {
+    let is = |p: &Path, name: &str| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case(name));
+    let mut dir = if rom.is_dir() { rom } else { rom.parent().unwrap_or(rom) };
+    if is(rom, "EBOOT.BIN") {
+        for name in ["USRDIR", "PS3_GAME"] {
+            if is(dir, name) {
+                dir = dir.parent().unwrap_or(dir);
+            }
+        }
+    }
+    dir.to_path_buf()
+}
+
+/// The `TITLE` in a `PARAM.SFO`: a header, a table of entries, then their
+/// keys and values.
+fn sfo_title(data: &[u8]) -> Option<String> {
+    let u16_at = |at: usize| Some(u16::from_le_bytes(data.get(at..at + 2)?.try_into().ok()?) as usize);
+    let u32_at = |at: usize| Some(u32::from_le_bytes(data.get(at..at + 4)?.try_into().ok()?) as usize);
+    if data.get(..4)? != b"\0PSF" {
+        return None;
+    }
+    let (keys, values, count) = (u32_at(8)?, u32_at(12)?, u32_at(16)?);
+    // Up to `len` bytes at `at`, ending at the first NUL; a value cut short
+    // by the end of the file isn't one.
+    let c_str = |at: usize, len: usize| {
+        let bytes = data.get(at..)?;
+        let bytes = if len == usize::MAX { bytes } else { bytes.get(..len)? };
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
+    };
+    (0..count).find_map(|i| {
+        let entry = 20 + i * 16;
+        let key = c_str(keys + u16_at(entry)?, usize::MAX)?;
+        (key == "TITLE").then(|| c_str(values + u32_at(entry + 12)?, u32_at(entry + 4)?))?
+    })
+}
+
+impl Emulator for Rpcs3 {
+    fn kind(&self) -> Kind {
+        Kind::Playstation3
+    }
+
+    fn system(&self) -> &'static str {
+        "PlayStation 3"
+    }
+
+    fn program(&self) -> &'static str {
+        "RPCS3"
+    }
+
+    fn find(&self) -> Option<Install> {
+        PROGRAM.find()
+    }
+
+    fn install_hint(&self) -> Option<String> {
+        PROGRAM.flatpak_hint()
+    }
+
+    fn setup(&self) -> Option<String> {
+        Some(
+            "Necesita el firmware de la PlayStation 3 (PS3UPDAT.PUP, de la web de PlayStation). Abre RPCS3 e \
+             instálalo desde File → Install Firmware."
+                .into(),
+        )
+    }
+
+    fn media(&self) -> Media {
+        Media::File {
+            label: "Juego".into(),
+            help: "La carpeta del juego (la que contiene PS3_GAME o USRDIR), su EBOOT.BIN o una imagen .iso. \
+                Se abre con RPCS3 desde donde está; no se copia."
+                .into(),
+            extensions: vec!["iso".into(), "bin".into()],
+            folder: true,
+        }
+    }
+
+    fn fixes(&self) -> Vec<Fix> {
+        vec![Fix::flag("--fullscreen", "La ventana del juego es muy pequeña", "Abre el juego a pantalla completa.")]
+    }
+
+    fn command(&self, game: &ExternalGame, settings: &BTreeMap<String, String>) -> Result<Command, String> {
+        Ok(command(&self.require()?, &game.path, rom(game)?, settings))
+    }
+
+    fn game_dir(&self, rom: &Path) -> PathBuf {
+        game_root(rom)
+    }
+
+    /// The title in the game's `PARAM.SFO`, else the folder's or image's name.
+    fn game_name(&self, rom: &Path) -> Option<String> {
+        if rom.extension().is_some_and(|e| e.eq_ignore_ascii_case("iso")) {
+            return image_name(rom);
+        }
+        let root = game_root(rom);
+        [root.join("PS3_GAME/PARAM.SFO"), root.join("PARAM.SFO")]
+            .iter()
+            .find_map(|sfo| sfo_title(&std::fs::read(sfo).ok()?))
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| image_name(&root))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::program::args;
+    use super::*;
+
+    /// A `PARAM.SFO` holding `entries`, all UTF-8 strings.
+    fn sfo(entries: &[(&str, &str)]) -> Vec<u8> {
+        let (mut keys, mut values, mut table) = (Vec::new(), Vec::new(), Vec::new());
+        for (k, v) in entries {
+            table.extend((keys.len() as u16).to_le_bytes());
+            table.extend(0x0204u16.to_le_bytes());
+            table.extend((v.len() as u32 + 1).to_le_bytes());
+            table.extend((v.len() as u32 + 1).to_le_bytes());
+            table.extend((values.len() as u32).to_le_bytes());
+            keys.extend(k.bytes().chain([0]));
+            values.extend(v.bytes().chain([0]));
+        }
+        let keys_at = 20 + table.len();
+        let values_at = keys_at + keys.len();
+        let mut data = b"\0PSF".to_vec();
+        data.extend(0x101u32.to_le_bytes());
+        data.extend((keys_at as u32).to_le_bytes());
+        data.extend((values_at as u32).to_le_bytes());
+        data.extend((entries.len() as u32).to_le_bytes());
+        data.extend(table);
+        data.extend(keys);
+        data.extend(values);
+        data
+    }
+
+    #[test]
+    fn reads_the_title() {
+        assert_eq!(sfo_title(&sfo(&[("CATEGORY", "DG"), ("TITLE", "Demon's Souls™")])).as_deref(), Some("Demon's Souls™"));
+        assert_eq!(sfo_title(&sfo(&[("CATEGORY", "DG")])), None);
+        assert_eq!(sfo_title(b"not an sfo"), None);
+        let mut cut = sfo(&[("TITLE", "Journey")]);
+        cut.truncate(cut.len() - 4);
+        assert_eq!(sfo_title(&cut), None);
+    }
+
+    #[test]
+    fn finds_the_whole_game_from_its_eboot() {
+        assert_eq!(game_root(Path::new("/g/DeS/PS3_GAME/USRDIR/EBOOT.BIN")), Path::new("/g/DeS"));
+        assert_eq!(game_root(Path::new("/g/Journey/USRDIR/EBOOT.BIN")), Path::new("/g/Journey"));
+        assert_eq!(game_root(Path::new("/g/Uncharted.iso")), Path::new("/g"));
+    }
+
+    #[test]
+    fn runs_without_the_game_list() {
+        let settings = BTreeMap::from([("--fullscreen".to_string(), String::new())]);
+        let cmd = command(&Install::Flatpak("net.rpcs3.RPCS3"), Path::new("/g/DeS"), Path::new("/g/DeS"), &settings);
+        assert_eq!(args(&cmd), ["run", "--filesystem=/g/DeS:ro", "net.rpcs3.RPCS3", "--no-gui", "--fullscreen", "/g/DeS"]);
+    }
+}

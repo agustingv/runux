@@ -83,7 +83,6 @@ pub fn missing_32bit_graphics() -> Option<Missing32Bit> {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct InstallHints {
-    pub scummvm: Option<String>,
     /// Wine with its 64-bit part, which Battle.net needs.
     pub wine: Option<String>,
 }
@@ -91,9 +90,14 @@ pub struct InstallHints {
 pub fn install_hints() -> InstallHints {
     let distro = Distro::current();
     InstallHints {
-        scummvm: distro.map(|d| d.install("scummvm")),
         wine: distro.map(|d| d.install(if d == Distro::Debian { "wine wine64" } else { "wine" })),
     }
+}
+
+/// The command that installs `packages` (space-separated) on this
+/// distribution, when it's one we know.
+pub fn install_command(packages: &str) -> Option<String> {
+    Distro::current().map(|d| d.install(packages))
 }
 
 /// The families of distributions whose package names we know.

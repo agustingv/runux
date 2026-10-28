@@ -1,10 +1,12 @@
-import type { EaGame, ExternalGame, Game } from "../api";
+import { Fragment } from "react";
+import type { EaGame, EmulatorInfo, ExternalGame, Game } from "../api";
 import { HomeIcon, PlusIcon } from "../icons";
 import { RunningDot, SideGame } from "./GameParts";
 
 interface Props {
   games: Game[];
   external: ExternalGame[];
+  emulators: EmulatorInfo[];
   eaGames: EaGame[];
   selected: string;
   onSelect: (id: string) => void;
@@ -17,7 +19,21 @@ export const externalKey = (id: string) => `ext:${id}`;
 /** Selection key of an EA game; also the task name of its launch. */
 export const eaKey = (id: string) => `ea:${id}`;
 
-export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGame }: Props) {
+export function Sidebar({ games, external, emulators, eaGames, selected, onSelect, onAddGame }: Props) {
+  const externalGame = (g: ExternalGame) => (
+    <SideGame
+      key={g.id}
+      gameKey={externalKey(g.id)}
+      name={g.name}
+      accent={g.accent}
+      ready={g.kind === "windows"}
+      active={selected === externalKey(g.id)}
+      onSelect={() => onSelect(externalKey(g.id))}
+    >
+      {g.running && <RunningDot />}
+    </SideGame>
+  );
+
   return (
     <nav className="sidebar">
       <div className="side-toolbar">
@@ -64,19 +80,18 @@ export function Sidebar({ games, external, eaGames, selected, onSelect, onAddGam
         ))}
 
         <div className="side-heading">Otros juegos</div>
-        {external.map((g) => (
-          <SideGame
-            key={g.id}
-            gameKey={externalKey(g.id)}
-            name={g.name}
-            accent={g.accent}
-            ready={g.kind === "windows"}
-            active={selected === externalKey(g.id)}
-            onSelect={() => onSelect(externalKey(g.id))}
-          >
-            {g.running && <RunningDot />}
-          </SideGame>
-        ))}
+        {external.filter((g) => g.kind === "windows").map(externalGame)}
+
+        {/* Emulated games, under their system. */}
+        {emulators.map((emu) => {
+          const list = external.filter((g) => g.kind === emu.kind);
+          return list.length > 0 && (
+            <Fragment key={emu.kind}>
+              <div className="side-heading">{emu.system}</div>
+              {list.map(externalGame)}
+            </Fragment>
+          );
+        })}
       </div>
     </nav>
   );

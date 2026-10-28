@@ -4,7 +4,7 @@
  * Commands that install, on this distribution, programs Runux uses but
  * doesn't depend on; `None` when it isn't one we know.
  */
-export type InstallHints = { scummvm: string | null, 
+export type InstallHints = { 
 /**
  * Wine with its 64-bit part, which Battle.net needs.
  */

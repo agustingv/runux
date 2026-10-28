@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { api, errorMessage, type Runner } from "../api";
+import { api, errorMessage, type EmulatorFix, type EmulatorInfo, type Runner } from "../api";
 
 /** A fix that is just an environment variable with a given value. */
 interface EnvFix {
@@ -145,6 +145,46 @@ export function Troubleshooting({ runner, env, logKey, onSaveEnv, eaOverlay }: P
       {error && <p className="note">{error}</p>}
       <p className="muted small">
         Los interruptores añaden o quitan variables en el editor de abajo. Se aplican la próxima vez que lances el juego.
+      </p>
+    </div>
+  );
+}
+
+/** An emulator's known problems, each with a switch that sets, for this game, the setting fixing it. */
+export function EmulatorTroubleshooting({ emulator, settings, onSave }: {
+  emulator: EmulatorInfo;
+  settings: Record<string, string>;
+  onSave: (settings: Record<string, string>) => Promise<void>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+
+  const on = (fix: EmulatorFix) => settings[fix.key] === fix.value;
+
+  const toggle = (fix: EmulatorFix) => {
+    setError(null);
+    const next = { ...settings };
+    if (on(fix)) delete next[fix.key];
+    else next[fix.key] = fix.value;
+    onSave(next).catch((e) => setError(errorMessage(e)));
+  };
+
+  return (
+    <div className="troubleshooting">
+      <h3 className="section-title">Solución de problemas</h3>
+      <ul className="fixes">
+        {emulator.fixes.map((fix) => (
+          <Fix
+            key={fix.key}
+            symptom={fix.symptom}
+            explanation={<>{fix.explanation} <span className="mono">{fix.value ? `${fix.key}=${fix.value}` : fix.key}</span></>}
+            on={on(fix)}
+            onToggle={() => toggle(fix)}
+          />
+        ))}
+      </ul>
+      {error && <p className="note">{error}</p>}
+      <p className="muted small">
+        Se aplican la próxima vez que lances el juego, solo a este juego, y no cambian la configuración de {emulator.program}.
       </p>
     </div>
   );

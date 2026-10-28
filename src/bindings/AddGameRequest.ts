@@ -7,10 +7,15 @@ export type AddGameRequest = { kind: ExternalKind,
  */
 name: string, 
 /**
- * ISO images to extract, or a single game directory (ScummVM).
+ * ISO images to extract, or a single game directory, for emulators of
+ * `Media::GameFiles`.
  */
 sources: Array<string>, 
 /**
  * Windows executable, for `Kind::Windows`.
  */
-exe: string | null, };
+exe: string | null, 
+/**
+ * Disc image or game folder, for emulators of `Media::File`.
+ */
+rom: string | null, };
