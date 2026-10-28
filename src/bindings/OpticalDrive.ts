@@ -4,4 +4,8 @@ export type OpticalDrive = { device: string, label: string | null,
 /**
  * Whether there is a disc in the drive.
  */
-media: boolean, };
+media: boolean, 
+/**
+ * Why its disc can't be installed from, when we can tell.
+ */
+unusable: string | null, };

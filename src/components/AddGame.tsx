@@ -64,6 +64,8 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
   const emulator = emulators.find((e) => e.kind === kind);
   const media = emulator?.media;
   const discMode = kind === "windows" && winSource === "disc";
+  /** Why the chosen drive's disc can't be installed from, e.g. an Xbox disc. */
+  const unusable = drives.find((d) => d.device === discs[0])?.unusable ?? null;
   const step = !session ? 0 : installDone ? 2 : 1;
 
   useEffect(() => {
@@ -281,39 +283,42 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
     );
   } else if (step === 0) {
     body = (
-      <label>
-        ¿Dónde está el juego?
-        <small className="muted">
-          Las imágenes ISO del juego (una carpeta con todas, o elegidas a mano) o el DVD del lector.
-          Se montan a la vez, cada una como una unidad de CD dentro del prefijo.
-        </small>
-        <div className="modal-row wrap">
-          <button className="ghost-btn" onClick={pickDiscFolder} disabled={discBusy}>Elegir carpeta…</button>
-          <button className="ghost-btn" onClick={pickDiscIsos} disabled={discBusy}>Elegir ISOs…</button>
-          {drives.map((d) => (
-            <button
-              key={d.device}
-              className={discs[0] === d.device ? "ghost-btn active" : "ghost-btn"}
-              onClick={() => setDiscs([d.device])}
-              disabled={discBusy || !d.media}
-              title={d.media ? d.device : `${d.device}: sin disco`}
-            >
-              DVD{d.label ? `: ${d.label}` : d.media ? "" : " (vacío)"}
-            </button>
-          ))}
-        </div>
-        {discs.length > 0 && (
-          <ol className="disc-list mono">
-            {discs.map((d) => <li key={d}>{isDevice(d) ? "DVD" : fileName(d)}</li>)}
-          </ol>
-        )}
-      </label>
+      <>
+        <label>
+          ¿Dónde está el juego?
+          <small className="muted">
+            Las imágenes ISO del juego (una carpeta con todas, o elegidas a mano) o el DVD del lector.
+            Se montan a la vez, cada una como una unidad de CD dentro del prefijo.
+          </small>
+          <div className="modal-row wrap">
+            <button className="ghost-btn" onClick={pickDiscFolder} disabled={discBusy}>Elegir carpeta…</button>
+            <button className="ghost-btn" onClick={pickDiscIsos} disabled={discBusy}>Elegir ISOs…</button>
+            {drives.map((d) => (
+              <button
+                key={d.device}
+                className={discs[0] === d.device ? "ghost-btn active" : "ghost-btn"}
+                onClick={() => setDiscs([d.device])}
+                disabled={discBusy || !d.media}
+                title={d.media ? d.device : `${d.device}: sin disco`}
+              >
+                DVD{d.label ? `: ${d.label}` : d.media ? "" : " (vacío)"}
+              </button>
+            ))}
+          </div>
+          {discs.length > 0 && (
+            <ol className="disc-list mono">
+              {discs.map((d) => <li key={d}>{isDevice(d) ? "DVD" : fileName(d)}</li>)}
+            </ol>
+          )}
+        </label>
+        {unusable && <p className="note">{unusable}</p>}
+      </>
     );
     primary = (
       <button
         className="play-btn small"
         onClick={() => discOp(() => api.startDiscSession(discs))}
-        disabled={discs.length === 0 || discBusy}
+        disabled={discs.length === 0 || discBusy || unusable !== null}
       >
         {discBusy ? "Montando…" : discs.length > 1 ? `Montar ${discs.length} discos` : "Montar"}
       </button>

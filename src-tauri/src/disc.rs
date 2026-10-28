@@ -45,6 +45,8 @@ pub struct OpticalDrive {
     pub label: Option<String>,
     /// Whether there is a disc in the drive.
     pub media: bool,
+    /// Why its disc can't be installed from, when we can tell.
+    pub unusable: Option<String>,
 }
 
 struct Mounted {
@@ -119,7 +121,7 @@ pub async fn optical_drives() -> Result<Vec<OpticalDrive>, String> {
         .filter(|d| d.kind == "rom")
         .map(|d| {
             let size = d.size.as_u64().or_else(|| d.size.as_str()?.parse().ok()).unwrap_or(0);
-            OpticalDrive { device: d.path, label: d.label, media: size > 0 }
+            OpticalDrive { device: d.path, unusable: d.label.as_deref().and_then(console_disc), label: d.label, media: size > 0 }
         })
         .collect())
 }
@@ -322,10 +324,34 @@ pub fn isos_in(dir: &Path) -> Result<Vec<String>, String> {
     Ok(isos)
 }
 
+/// Why a disc with volume `label` holds nothing to install: Xbox game discs
+/// (XGD1 for the Xbox, XGD2 and XGD3 for the Xbox 360) show a PC drive only
+/// the short video asking for the console, e.g. `XGD2DVD_NTSC`.
+fn console_disc(label: &str) -> Option<String> {
+    let console = match label.as_bytes() {
+        [x, g, d, generation, ..] if [*x, *g, *d].eq_ignore_ascii_case(b"XGD") => match generation {
+            b'1' => "Xbox",
+            b'2' | b'3' => "Xbox 360",
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(format!(
+        "Es un disco de {console}. El lector del PC solo ve el vídeo que pide meterlo en la consola: los datos \
+         del juego están en una zona que solo lee el lector de la {console}, y no traen un instalador de \
+         Windows. Para jugarlo con un emulador hace falta una imagen ISO sacada con la consola (modificada) o \
+         con un lector con firmware Kreon."
+    ))
+}
+
 async fn mount_one(app: &AppHandle, cfg: &Config, disc: &str) -> Result<Mounted, String> {
     let name = Path::new(disc).file_name().map_or(disc.into(), |n| n.to_string_lossy().into_owned());
     wine::log(app, TASK, format!("Montando {name}"));
     let mut mounted = mount(disc).await?;
+    if let Some(why) = mounted.label.as_deref().and_then(console_disc) {
+        unmount(&mounted);
+        return Err(why);
+    }
     if let Err(e) = attach(app, cfg, &mut mounted).await {
         detach(app, cfg, mounted).await;
         return Err(e);
@@ -614,6 +640,17 @@ mod tests {
         let names: Vec<_> = exes.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(names, ["XIII.exe", "XIIIEd.exe", "unins000.exe", "UCC.exe"]);
+    }
+
+    #[test]
+    fn recognizes_xbox_discs() {
+        assert!(console_disc("XGD2DVD_NTSC").unwrap().starts_with("Es un disco de Xbox 360."));
+        assert!(console_disc("xgd3dvd_pal").unwrap().contains("Xbox 360"));
+        assert!(console_disc("XGD1DVD").unwrap().starts_with("Es un disco de Xbox."));
+        assert_eq!(console_disc("XGD"), None);
+        assert_eq!(console_disc("XIII_DVD"), None);
+        assert_eq!(console_disc("ñXGD2"), None);
+        assert_eq!(console_disc("XGñ2"), None);
     }
 
     #[test]
