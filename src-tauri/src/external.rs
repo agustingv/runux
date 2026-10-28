@@ -103,12 +103,14 @@ fn lock() -> MutexGuard<'static, ()> {
     STORE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The games this version can run; others, added by a newer version, are
+/// kept in the file but left out.
 pub fn load() -> Vec<ExternalGame> {
-    store::load(&store_path())
+    store::load_list(&store_path()).0
 }
 
 fn save(games: &[ExternalGame]) -> Result<(), String> {
-    store::save(&store_path(), games)
+    store::save_list(&store_path(), games)
 }
 
 pub fn find(id: &str) -> Result<ExternalGame, String> {
@@ -160,7 +162,14 @@ fn unique_id(name: &str, games: &[ExternalGame]) -> String {
     let base = slug(name);
     let mut id = base.clone();
     let mut n = 2;
-    while games.iter().any(|g| g.id == id) || config::data_dir().join("games").join(&id).exists() {
+    // Games left out by `load` hold their ids too.
+    let (_, others) = store::load_list::<ExternalGame>(&store_path());
+    let taken = |id: &str| {
+        games.iter().any(|g| g.id == id)
+            || others.iter().any(|g| g["id"] == id)
+            || config::data_dir().join("games").join(id).exists()
+    };
+    while taken(&id) {
         id = format!("{base}-{n}");
         n += 1;
     }
