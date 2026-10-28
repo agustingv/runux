@@ -3,4 +3,4 @@
 /**
  * What runs the game: Wine/Proton for `Windows`, an emulator for the rest.
  */
-export type ExternalKind = "scummvm" | "windows" | "dreamcast";
+export type ExternalKind = "scummvm" | "windows" | "dreamcast" | "playstation" | "playstation2" | "playstation3" | "psp";

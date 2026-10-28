@@ -12,7 +12,7 @@ path: string,
  */
 exe: string | null, 
 /**
- * Disc image the emulator opens, for emulators of `Media::Image`.
+ * Disc image or game folder the emulator opens, for emulators of `Media::File`.
  */
 rom: string | null, 
 /**

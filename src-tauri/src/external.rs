@@ -22,6 +22,10 @@ pub enum Kind {
     Scummvm,
     Windows,
     Dreamcast,
+    Playstation,
+    Playstation2,
+    Playstation3,
+    Psp,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -37,7 +41,7 @@ pub struct ExternalGame {
     /// Windows executable, for `Kind::Windows`.
     #[serde(default)]
     pub exe: Option<PathBuf>,
-    /// Disc image the emulator opens, for emulators of `Media::Image`.
+    /// Disc image or game folder the emulator opens, for emulators of `Media::File`.
     #[serde(default)]
     pub rom: Option<PathBuf>,
     /// ScummVM target, e.g. `bladerunner:bladerunner`.
@@ -79,7 +83,7 @@ pub struct AddRequest {
     pub sources: Vec<PathBuf>,
     /// Windows executable, for `Kind::Windows`.
     pub exe: Option<PathBuf>,
-    /// Disc image, for emulators of `Media::Image`.
+    /// Disc image or game folder, for emulators of `Media::File`.
     pub rom: Option<PathBuf>,
 }
 
@@ -140,16 +144,6 @@ fn running_marker(cfg: &Config, game: &ExternalGame) -> String {
 
 fn has_extension(p: &Path, extensions: &[String]) -> bool {
     p.extension().is_some_and(|e| extensions.iter().any(|ext| e.eq_ignore_ascii_case(ext)))
-}
-
-/// The name a disc image suggests: its file name, unless that's the generic
-/// `disc.gdi` of GD-ROM dumps, where the folder names the game.
-fn image_name(rom: &Path) -> Option<String> {
-    let stem = rom.file_stem()?.to_string_lossy();
-    if stem.eq_ignore_ascii_case("disc") {
-        return Some(rom.parent()?.file_name()?.to_string_lossy().into());
-    }
-    Some(stem.into())
 }
 
 pub(crate) fn slug(name: &str) -> String {
@@ -233,13 +227,13 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
             let dir = exe.parent().ok_or("Ruta de ejecutable no válida")?;
             (dir.to_path_buf(), false)
         }
-        Some((emu, Media::Image { extensions })) => {
-            let rom = req.rom.as_ref().ok_or("Elige la imagen del disco del juego")?;
-            if !has_extension(rom, &extensions) {
-                return Err(format!("{} abre imágenes {}", emu.program(), extensions.join(", ")));
+        Some((emu, Media::File { extensions, folder, .. })) => {
+            let rom = req.rom.as_ref().ok_or("Elige el juego")?;
+            if !(has_extension(rom, &extensions) || folder && rom.is_dir()) {
+                let what = if folder { "carpetas de juego o imágenes" } else { "imágenes" };
+                return Err(format!("{} abre {what} {}", emu.program(), extensions.join(", ")));
             }
-            let dir = rom.parent().ok_or("Ruta de imagen no válida")?;
-            (dir.to_path_buf(), false)
+            (emu.game_dir(rom), false)
         }
         Some((_, Media::GameFiles)) if isos.is_empty() => match req.sources.as_slice() {
             [dir] if dir.is_dir() => (dir.clone(), false),
@@ -269,7 +263,7 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
                 return Err(e);
             }
         },
-        _ => (None, req.rom.as_deref().and_then(image_name)),
+        _ => (None, emu.zip(req.rom.as_deref()).and_then(|(emu, rom)| emu.game_name(rom))),
     };
 
     let name = match req.name.trim() {
@@ -417,13 +411,11 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_images_and_their_names() {
+    fn recognizes_image_extensions() {
         let dreamcast = ["gdi".to_string(), "cdi".to_string()];
         assert!(has_extension(Path::new("/g/Crazy Taxi.CDI"), &dreamcast));
         assert!(has_extension(Path::new("/g/Shenmue/disc.gdi"), &dreamcast));
         assert!(!has_extension(Path::new("/g/game.iso"), &dreamcast));
-        assert_eq!(image_name(Path::new("/g/Crazy Taxi.cdi")).as_deref(), Some("Crazy Taxi"));
-        assert_eq!(image_name(Path::new("/g/Shenmue/disc.gdi")).as_deref(), Some("Shenmue"));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { ExternalKind } from "./bindings/ExternalKind";
 import type { Task } from "./bindings/Task";
 
 // Types shared with the Rust side, generated from it by `cargo test` (ts-rs).
@@ -95,6 +96,7 @@ export const api = {
   openExternalFolder: (id: string) => invoke<void>("open_external_folder", { id }),
   setExternalEnv: (id: string, env: Record<string, string>) =>
     invoke<ExternalGameEntry>("set_external_env", { id, env }),
+  openEmulator: (kind: ExternalKind) => invoke<void>("open_emulator", { kind }),
   setExternalSettings: (id: string, settings: Record<string, string>) =>
     invoke<ExternalGameEntry>("set_external_settings", { id, settings }),
   listOpticalDrives: () => invoke<OpticalDrive[]>("list_optical_drives"),

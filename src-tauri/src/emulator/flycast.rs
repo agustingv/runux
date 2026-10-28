@@ -1,56 +1,26 @@
 //! Flycast, the Dreamcast emulator.
 
-use super::{is_word, Emulator, Fix, Media};
+use super::program::{Install, Program};
+use super::{is_word, rom, Emulator, Fix, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::process::Command;
 
-const FLATPAK: &str = "org.flycast.Flycast";
-
-/// Dreamcast disc images Flycast opens.
-const IMAGES: &[&str] = &["gdi", "cdi", "chd", "cue"];
+const PROGRAM: Program = Program { bins: &["flycast"], paths: &[], flatpak: Some("org.flycast.Flycast") };
 
 pub struct Flycast;
 
-/// How Flycast is installed.
-enum Install {
-    Native(PathBuf),
-    /// From Flathub, which can read every file (`--filesystem=host:ro`).
-    Flatpak,
-}
-
-impl Install {
-    /// `flycast` on `$PATH`, else the Flatpak, per user or system-wide.
-    fn find() -> Option<Install> {
-        let path = std::env::var_os("PATH").unwrap_or_default();
-        if let Some(bin) = std::env::split_paths(&path).map(|dir| dir.join("flycast")).find(|p| p.is_file()) {
-            return Some(Install::Native(bin));
-        }
-        let user = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/flatpak"));
-        user.into_iter()
-            .chain([PathBuf::from("/var/lib/flatpak")])
-            .any(|root| root.join("app").join(FLATPAK).join("current").exists())
-            .then_some(Install::Flatpak)
+/// Opens `rom`, in `dir`, with `settings` as `-config` options, which apply
+/// to this run only: they don't touch `emu.cfg`.
+fn command(install: &Install, dir: &Path, rom: &Path, settings: &BTreeMap<String, String>) -> Command {
+    let mut cmd = install.command(&[dir]);
+    for (key, value) in settings {
+        cmd.arg("-config").arg(format!("{key}={value}"));
     }
-
-    /// Opens `rom` with `settings` as `-config` options.
-    fn command(&self, rom: &Path, settings: &BTreeMap<String, String>) -> Command {
-        let mut cmd = match self {
-            Install::Native(bin) => Command::new(bin),
-            Install::Flatpak => {
-                let mut cmd = Command::new("flatpak");
-                cmd.arg("run").arg(FLATPAK);
-                cmd
-            }
-        };
-        for (key, value) in settings {
-            cmd.arg("-config").arg(format!("{key}={value}"));
-        }
-        // Last, where `running_marker` looks for it.
-        cmd.arg(rom);
-        cmd
-    }
+    // Last, where `running_marker` looks for it.
+    cmd.arg(rom);
+    cmd
 }
 
 impl Emulator for Flycast {
@@ -66,21 +36,18 @@ impl Emulator for Flycast {
         "Flycast"
     }
 
-    /// From Flathub, the same everywhere.
-    fn install_hint(&self) -> Option<String> {
-        Some(format!("flatpak install flathub {FLATPAK}"))
+    fn find(&self) -> Option<Install> {
+        PROGRAM.find()
     }
 
-    fn installed(&self) -> bool {
-        Install::find().is_some()
+    fn install_hint(&self) -> Option<String> {
+        PROGRAM.flatpak_hint()
     }
 
     fn media(&self) -> Media {
-        Media::Image { extensions: IMAGES.iter().map(|e| e.to_string()).collect() }
+        Media::image(self.program(), &["gdi", "cdi", "chd", "cue"])
     }
 
-    /// Settings go in as `-config section:key=value`, for this run only: they
-    /// don't touch `emu.cfg`.
     fn fixes(&self) -> Vec<Fix> {
         vec![Fix {
             symptom: "El juego va demasiado rápido".into(),
@@ -107,29 +74,24 @@ impl Emulator for Flycast {
     }
 
     fn command(&self, game: &ExternalGame, settings: &BTreeMap<String, String>) -> Result<Command, String> {
-        let rom = game.rom.as_ref().ok_or("Falta la imagen del disco")?;
-        Ok(Install::find().ok_or_else(|| self.missing())?.command(rom, settings))
-    }
-
-    fn running_marker(&self, game: &ExternalGame) -> String {
-        let rom = game.rom.as_deref().unwrap_or(&game.path);
-        format!("{} ", rom.to_string_lossy().to_lowercase())
+        Ok(command(&self.require()?, &game.path, rom(game)?, settings))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::program::args;
     use super::*;
 
     #[test]
     fn passes_settings_before_the_image() {
-        let args = |cmd: Command| cmd.as_std().get_args().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>();
-        let rom = Path::new("/g/Sonic/disc.gdi");
+        let (dir, rom) = (Path::new("/g/Sonic"), Path::new("/g/Sonic/disc.gdi"));
+        let flatpak = Install::Flatpak("org.flycast.Flycast");
         assert_eq!(
-            args(Install::Flatpak.command(rom, &Flycast.default_settings())),
-            ["run", FLATPAK, "-config", "rend:DupeFrames=yes", "/g/Sonic/disc.gdi"]
+            args(&command(&flatpak, dir, rom, &Flycast.default_settings())),
+            ["run", "--filesystem=/g/Sonic:ro", "org.flycast.Flycast", "-config", "rend:DupeFrames=yes", "/g/Sonic/disc.gdi"]
         );
-        assert_eq!(args(Install::Native("/usr/bin/flycast".into()).command(rom, &BTreeMap::new())), ["/g/Sonic/disc.gdi"]);
+        assert_eq!(args(&command(&Install::Native("/usr/bin/flycast".into()), dir, rom, &BTreeMap::new())), ["/g/Sonic/disc.gdi"]);
     }
 
     #[test]

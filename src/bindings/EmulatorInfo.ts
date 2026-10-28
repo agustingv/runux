@@ -14,4 +14,8 @@ system: string, program: string, installed: boolean,
 /**
  * The command that installs it, when known.
  */
-installHint: string | null, media: EmulatorMedia, fixes: Array<EmulatorFix>, };
+installHint: string | null, 
+/**
+ * What to set up in it before playing (a BIOS, firmware…), if anything.
+ */
+setup: string | null, media: EmulatorMedia, fixes: Array<EmulatorFix>, };

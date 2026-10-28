@@ -43,6 +43,8 @@ function Steps({ current }: { current: number }) {
 
 export function AddGame({ emulators, busy, installing, progress, onAdd, onInstall, onClose }: Props) {
   const [kind, setKind] = useState<ExternalKind>("windows");
+  /** The system last chosen, to come back to it from Windows. */
+  const [emulatorKind, setEmulatorKind] = useState<ExternalKind>(emulators[0]?.kind ?? "windows");
   const [winSource, setWinSource] = useState<WindowsSource>("exe");
   const [name, setName] = useState("");
   const [sources, setSources] = useState<string[]>([]);
@@ -87,10 +89,20 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
     if (picked) setExe(picked);
   };
   const pickRom = async () => {
-    if (media?.type !== "image") return;
+    if (media?.type !== "file") return;
     const extensions = [...media.extensions, ...media.extensions.map((e) => e.toUpperCase())];
-    const picked = await open({ filters: [{ name: `Imágenes de ${emulator!.system}`, extensions }] });
+    const picked = await open({ filters: [{ name: `Juegos de ${emulator!.system}`, extensions }] });
     if (picked) setRom(picked);
+  };
+  const pickRomFolder = async () => {
+    const picked = await open({ directory: true });
+    if (picked) setRom(picked);
+  };
+  const chooseEmulator = (k: ExternalKind) => {
+    setEmulatorKind(k);
+    setKind(k);
+    setRom(null);
+    setSources([]);
   };
   const pickDiscIsos = async () => {
     const picked = await open({ multiple: true, filters: [{ name: "Imágenes ISO", extensions: ["iso", "ISO"] }] });
@@ -169,7 +181,7 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
   const locked = busy || waiting || discBusy;
   const close = locked ? undefined : onClose;
   const ready =
-    emulator ? emulator.installed && (media?.type === "image" ? rom !== null : sources.length > 0)
+    emulator ? emulator.installed && (media?.type === "file" ? rom !== null : sources.length > 0)
     : exe !== null && !waiting;
   // `game.exe` says little; the folder it was installed to names the game.
   const suggestedName = discMode && exe ? folderName(exe) : "";
@@ -180,7 +192,7 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
       name: name.trim() || suggestedName,
       sources: media?.type === "gameFiles" ? sources : [],
       exe: emulator ? null : exe,
-      rom: media?.type === "image" ? rom : null,
+      rom: media?.type === "file" ? rom : null,
     });
 
   const nameField = (
@@ -192,7 +204,7 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
         placeholder={
           suggestedName ||
           (media?.type === "gameFiles" ? `Automático (lo detecta ${emulator!.program})`
-            : media?.type === "image" ? "Nombre del archivo"
+            : media?.type === "file" ? "Automático (del juego o del archivo)"
             : "Nombre del ejecutable")
         }
         disabled={busy}
@@ -207,11 +219,16 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
   let body: React.ReactNode;
   let primary: React.ReactNode;
 
-  const notInstalled = emulator && !emulator.installed && (
-    <p className="note">
-      {emulator.program} no está instalado.{" "}
-      {emulator.installHint ? <>Instálalo con <code>{emulator.installHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
-    </p>
+  const notInstalled = emulator && (
+    <>
+      {!emulator.installed && (
+        <p className="note">
+          {emulator.program} no está instalado.{" "}
+          {emulator.installHint ? <>Instálalo con <code>{emulator.installHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
+        </p>
+      )}
+      {emulator.setup && <p className="muted small">{emulator.setup}</p>}
+    </>
   );
 
   if (media?.type === "gameFiles") {
@@ -232,19 +249,16 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
         {nameField}
       </>
     );
-  } else if (media?.type === "image") {
-    const extensions = media.extensions.map((e) => `.${e}`);
+  } else if (media?.type === "file") {
     body = (
       <>
         {notInstalled}
         <label>
-          Imagen del disco
-          <small className="muted">
-            {extensions.length > 1 ? `Un ${extensions.slice(0, -1).join(", ")} o ${extensions[extensions.length - 1]}` : `Un ${extensions[0]}`}.
-            {" "}Se abre con {emulator!.program} desde donde está; no se copia.
-          </small>
+          {media.label}
+          <small className="muted">{media.help}</small>
           <div className="modal-row">
-            <button className="ghost-btn" onClick={pickRom} disabled={busy}>Elegir imagen…</button>
+            {media.folder && <button className="ghost-btn" onClick={pickRomFolder} disabled={busy}>Elegir carpeta…</button>}
+            <button className="ghost-btn" onClick={pickRom} disabled={busy}>{media.folder ? "Elegir archivo…" : "Elegir imagen…"}</button>
           </div>
           {rom && <small className="mono">{rom}</small>}
         </label>
@@ -420,20 +434,31 @@ export function AddGame({ emulators, busy, installing, progress, onAdd, onInstal
         ) : (
           <>
             <div className="segmented" role="radiogroup" aria-label="Motor">
-              {[{ kind: "windows" as ExternalKind, label: "Windows (Wine/Proton)" },
-                ...emulators.map((e) => ({ kind: e.kind, label: e.system }))].map(({ kind: k, label }) => (
+              {[{ emu: false, label: "Windows (Wine/Proton)" }, { emu: true, label: "Emulador" }].map(({ emu, label }) => (
                 <button
-                  key={k}
+                  key={label}
                   role="radio"
-                  aria-checked={kind === k}
-                  className={kind === k ? "active" : ""}
-                  onClick={() => setKind(k)}
-                  disabled={locked}
+                  aria-checked={!!emulator === emu}
+                  className={!!emulator === emu ? "active" : ""}
+                  onClick={() => (emu ? chooseEmulator(emulatorKind) : setKind("windows"))}
+                  disabled={locked || (emu && emulators.length === 0)}
                 >
                   {label}
                 </button>
               ))}
             </div>
+            {emulator && (
+              <label>
+                Sistema
+                <select value={kind} onChange={(e) => chooseEmulator(e.target.value as ExternalKind)} disabled={locked}>
+                  {emulators.map((e) => (
+                    <option key={e.kind} value={e.kind}>
+                      {e.system === e.program ? e.program : `${e.system} (${e.program})`}{e.installed ? "" : " — no instalado"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {kind === "windows" && (
               <div className="segmented" role="radiogroup" aria-label="Origen">
                 {(["exe", "disc"] as WindowsSource[]).map((s) => (

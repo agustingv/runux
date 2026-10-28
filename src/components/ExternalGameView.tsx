@@ -14,6 +14,8 @@ interface Props {
   onPlay: () => void;
   onOpenFolder: () => void;
   onRemove: () => void;
+  /** Opens the emulator on its own, to set it up. */
+  onOpenEmulator: () => void;
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
   onSaveSettings: (settings: Record<string, string>) => Promise<void>;
 }
@@ -24,7 +26,7 @@ const engine = (emulator?: EmulatorInfo) =>
   : `${emulator.system} (${emulator.program})`;
 
 export function ExternalGameView({
-  game, emulator, runner, launching, onPlay, onOpenFolder, onRemove, onSaveEnv, onSaveSettings,
+  game, emulator, runner, launching, onPlay, onOpenFolder, onRemove, onOpenEmulator, onSaveEnv, onSaveSettings,
 }: Props) {
   return (
     <div className="game-view">
@@ -35,6 +37,11 @@ export function ExternalGameView({
         <button className="ghost-btn" onClick={onOpenFolder}>
           <FolderIcon /> Carpeta
         </button>
+        {emulator?.installed && (
+          <button className="ghost-btn" onClick={onOpenEmulator} title="Para configurarlo: mandos, gráficos, BIOS…">
+            Abrir {emulator.program}
+          </button>
+        )}
         <button className="ghost-btn danger" onClick={onRemove} disabled={game.running}>
           Quitar
         </button>
@@ -47,6 +54,7 @@ export function ExternalGameView({
             {emulator.installHint ? <>Instálalo con <code>{emulator.installHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
           </p>
         )}
+        {emulator?.setup && <p className="muted small">{emulator.setup}</p>}
         <dl>
           <dt>Estado</dt>
           <dd>{game.running ? "En ejecución" : "Listo para jugar"}</dd>

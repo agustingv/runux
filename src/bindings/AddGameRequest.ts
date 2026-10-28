@@ -16,6 +16,6 @@ sources: Array<string>,
  */
 exe: string | null, 
 /**
- * Disc image, for emulators of `Media::Image`.
+ * Disc image or game folder, for emulators of `Media::File`.
  */
 rom: string | null, };

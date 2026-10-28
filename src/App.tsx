@@ -166,6 +166,7 @@ export default function App() {
               onPlay={() => play(externalKey(ext.id), () => api.launchExternalGame(ext.id))}
               onOpenFolder={guard(() => api.openExternalFolder(ext.id))}
               onRemove={() => removeGame(ext)}
+              onOpenEmulator={guard(() => api.openEmulator(ext.kind))}
               onSaveEnv={async (env) => {
                 await api.setExternalEnv(ext.id, env);
                 refresh();

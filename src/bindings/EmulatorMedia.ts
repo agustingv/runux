@@ -3,4 +3,16 @@
 /**
  * What the player picks when adding a game.
  */
-export type EmulatorMedia = { "type": "image", extensions: Array<string>, } | { "type": "gameFiles" };
+export type EmulatorMedia = { "type": "file", 
+/**
+ * What it is, e.g. `Imagen del disco`.
+ */
+label: string, 
+/**
+ * Which files and how they're used.
+ */
+help: string, extensions: Array<string>, 
+/**
+ * Whether a game folder also works.
+ */
+folder: boolean, } | { "type": "gameFiles" };

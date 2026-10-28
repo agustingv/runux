@@ -341,6 +341,14 @@ fn set_external_settings(
     external::set_settings(&id, settings)
 }
 
+/// Opens an emulator on its own, to set it up.
+#[tauri::command]
+fn open_emulator(app: AppHandle, kind: external::Kind) -> Result<(), String> {
+    let emu = emulator::get(kind).ok_or("No es un emulador")?;
+    wine::spawn_logged(&app, &format!("emu:{kind:?}"), emu.open()?);
+    Ok(())
+}
+
 #[tauri::command]
 fn open_external_folder(id: String) -> Result<(), String> {
     xdg_open(&external::find(&id)?.path)
@@ -476,6 +484,7 @@ pub fn run() {
             open_external_folder,
             set_external_env,
             set_external_settings,
+            open_emulator,
             list_optical_drives,
             list_isos,
             start_disc_session,
