@@ -1,5 +1,6 @@
 mod battlenet;
 mod config;
+mod covers;
 mod disc;
 mod download;
 mod dxvk;
@@ -294,19 +295,31 @@ async fn game_background(key: String) -> Result<Option<String>, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Where a game's icon comes from.
+enum IconSource {
+    /// Read: a data URL.
+    Read(String),
+    /// Box art to download.
+    Cover(emulator::Cover),
+}
+
 /// Data URL of a game's icon: the one in its executable or, for a game run
-/// by an emulator, the one on its disc. `key` is the game's key in the
-/// sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
+/// by an emulator, the one on its disc or its downloaded box art. `key` is
+/// the game's key in the sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
 #[tauri::command]
 async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
     let cfg = state.config();
-    tokio::task::spawn_blocking(move || {
+    let source = tokio::task::spawn_blocking(move || {
         let exe = if let Some(id) = key.strip_prefix("ea:") {
             ea::find_game(&cfg.ea(), id, &[]).ok()?.exe?
         } else if let Some(id) = key.strip_prefix("ext:") {
             let game = external::find(id).ok()?;
             if let Some(emu) = emulator::get(game.kind) {
-                return emu.art(game.rom.as_deref()?, emulator::Art::Icon).map(|png| data_url("image/png", &png));
+                let rom = game.rom.as_deref()?;
+                return match emu.art(rom, emulator::Art::Icon) {
+                    Some(png) => Some(IconSource::Read(data_url("image/png", &png))),
+                    None => emu.cover(rom).map(IconSource::Cover),
+                };
             }
             game.exe?
         } else {
@@ -315,10 +328,15 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
             disc::guess_exe(Path::new(&game.local_path))?
         };
         let icon = exeicon::read(&exe)?;
-        Some(data_url(icon.mime, &icon.data))
+        Some(IconSource::Read(data_url(icon.mime, &icon.data)))
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    Ok(match source {
+        Some(IconSource::Read(url)) => Some(url),
+        Some(IconSource::Cover(cover)) => covers::get(&cover).await.map(|jpeg| data_url("image/jpeg", &jpeg)),
+        None => None,
+    })
 }
 
 #[tauri::command]
