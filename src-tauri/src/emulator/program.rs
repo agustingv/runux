@@ -32,11 +32,7 @@ impl Program {
             return Some(Install::Native(bin));
         }
         let id = self.flatpak?;
-        let user = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/flatpak"));
-        user.into_iter()
-            .chain([PathBuf::from("/var/lib/flatpak")])
-            .any(|root| root.join("app").join(id).join("current").exists())
-            .then_some(Install::Flatpak(id))
+        flatpak_dir(id).map(|_| Install::Flatpak(id))
     }
 
     /// The command that installs it from Flathub, the same everywhere.
@@ -45,7 +41,38 @@ impl Program {
     }
 }
 
+/// Where the Flatpak `id` is installed, per user or system-wide.
+fn flatpak_dir(id: &str) -> Option<PathBuf> {
+    let user = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/flatpak"));
+    user.into_iter()
+        .chain([PathBuf::from("/var/lib/flatpak")])
+        .map(|root| root.join("app").join(id).join("current"))
+        .find(|dir| dir.exists())
+}
+
 impl Install {
+    /// The folder holding the program's own files: the Flatpak's `/app`, or
+    /// the one with the binary.
+    pub fn files(&self) -> Option<PathBuf> {
+        match self {
+            Install::Native(bin) => bin.parent().map(Path::to_path_buf),
+            Install::Flatpak(id) => flatpak_dir(id).map(|dir| dir.join("active/files")),
+        }
+    }
+
+    /// The program's settings folder `name`, which a Flatpak keeps in its own
+    /// `~/.var/app/<id>/config`.
+    pub fn config_dir(&self, name: &str) -> Option<PathBuf> {
+        let home = PathBuf::from(std::env::var_os("HOME")?);
+        Some(match self {
+            Install::Flatpak(id) => home.join(".var/app").join(id).join("config").join(name),
+            Install::Native(_) => match std::env::var_os("XDG_CONFIG_HOME") {
+                Some(config) => PathBuf::from(config).join(name),
+                None => home.join(".config").join(name),
+            },
+        })
+    }
+
     /// The command that starts the program, able to read `dirs`: a Flatpak
     /// only sees what its sandbox lets it, and some can't read the home folder.
     pub fn command(&self, dirs: &[&Path]) -> Command {
