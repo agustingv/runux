@@ -85,6 +85,7 @@ export const api = {
   openGameFolder: (uid: string) => invoke<void>("open_game_folder", { uid }),
   /** Data URL of the icon in a game's executable, by its key in the sidebar. */
   gameIcon: (key: string) => invoke<string | null>("game_icon", { key }),
+  gameBackground: (key: string) => invoke<string | null>("game_background", { key }),
   /** Opens the folder of a game's Proton log, by its task (`ea:<id>`, `ext:<id>`). */
   openGameLogs: (key: string) => invoke<void>("open_game_logs", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),

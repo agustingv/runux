@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import { PlayIcon } from "../icons";
-import { GameIcon } from "./GameIcon";
+import { GameIcon, useGameBackground } from "./GameIcon";
 
-/** The header of a game's page: its icon and name over its accent color. */
+/** The header of a game's page: its icon and name over its disc's background, or its accent color. */
 export function Banner({ gameKey, name, accent, ready }: {
   gameKey: string;
   name: string;
@@ -10,8 +10,10 @@ export function Banner({ gameKey, name, accent, ready }: {
   /** False while there is no executable to read the icon from. */
   ready: boolean;
 }) {
+  const background = useGameBackground(gameKey);
   return (
-    <header className="banner" style={{ "--accent": accent } as CSSProperties}>
+    <header className={`banner ${background ? "has-bg" : ""}`} style={{ "--accent": accent } as CSSProperties}>
+      {background && <img className="banner-bg" src={background} alt="" />}
       <GameIcon gameKey={gameKey} name={name} ready={ready} className="banner-mark" />
       <h1>{name}</h1>
     </header>
@@ -34,7 +36,7 @@ export function SimplePlayButton({ running, launching, onPlay }: { running: bool
   return <PlayButton label={label} onClick={onPlay} disabled={running || launching} />;
 }
 
-/** A game's tile on the home page: its icon (or initials) over its accent color. */
+/** A game's tile on the home page: its icon (or initials) over its disc's background, or its accent color. */
 export function GameTile({ gameKey, name, accent, ready, state, onClick }: {
   gameKey: string;
   name: string;
@@ -43,9 +45,13 @@ export function GameTile({ gameKey, name, accent, ready, state, onClick }: {
   state: string;
   onClick: () => void;
 }) {
+  const background = useGameBackground(gameKey);
   return (
     <button className="tile" onClick={onClick}>
-      <div className="tile-art" style={{ background: accent }}>
+      <div
+        className={`tile-art ${background ? "has-bg" : ""}`}
+        style={{ background: background ? `center / cover url("${background}")` : accent }}
+      >
         <GameIcon gameKey={gameKey} name={name} ready={ready} className="tile-icon" />
       </div>
       <div className="tile-name">{name}</div>

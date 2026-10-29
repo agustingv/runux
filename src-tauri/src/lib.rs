@@ -8,6 +8,7 @@ mod emulator;
 mod exeicon;
 mod external;
 mod help;
+mod iso9660;
 mod host;
 mod productdb;
 mod proton;
@@ -275,24 +276,46 @@ fn cancel_download(task: String) {
     download::cancel(&task);
 }
 
-/// Data URL of the icon in a game's executable. `key` is the game's key in
-/// the sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
+fn data_url(mime: &str, data: &[u8]) -> String {
+    use base64::Engine;
+    format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(data))
+}
+
+/// Data URL of the picture an emulator game's disc shows behind it in the
+/// console's menu (`PIC1.PNG`), if it has one. `key` as for `game_icon`.
+#[tauri::command]
+async fn game_background(key: String) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let game = external::find(key.strip_prefix("ext:")?).ok()?;
+        let png = emulator::get(game.kind)?.art(game.rom.as_deref()?, emulator::Art::Background)?;
+        Some(data_url("image/png", &png))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Data URL of a game's icon: the one in its executable or, for a game run
+/// by an emulator, the one on its disc. `key` is the game's key in the
+/// sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
 #[tauri::command]
 async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
-    use base64::Engine;
     let cfg = state.config();
     tokio::task::spawn_blocking(move || {
         let exe = if let Some(id) = key.strip_prefix("ea:") {
             ea::find_game(&cfg.ea(), id, &[]).ok()?.exe?
         } else if let Some(id) = key.strip_prefix("ext:") {
-            external::find(id).ok()?.exe?
+            let game = external::find(id).ok()?;
+            if let Some(emu) = emulator::get(game.kind) {
+                return emu.art(game.rom.as_deref()?, emulator::Art::Icon).map(|png| data_url("image/png", &png));
+            }
+            game.exe?
         } else {
             // Battle.net doesn't say which executable is the game's.
             let game = battlenet::find_game(&cfg, &key, &[]).ok()?;
             disc::guess_exe(Path::new(&game.local_path))?
         };
         let icon = exeicon::read(&exe)?;
-        Some(format!("data:{};base64,{}", icon.mime, base64::engine::general_purpose::STANDARD.encode(icon.data)))
+        Some(data_url(icon.mime, &icon.data))
     })
     .await
     .map_err(|e| e.to_string())
@@ -477,6 +500,7 @@ pub fn run() {
             open_prefix,
             open_game_folder,
             game_icon,
+            game_background,
             open_game_logs,
             list_protons,
             install_ge_proton,
