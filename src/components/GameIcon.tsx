@@ -14,6 +14,15 @@ function cached(cache: Map<string, Promise<string | null>>, gameKey: string, get
   return picture;
 }
 
+/** Shown icons, re-asked for when a game's icon changes (a cover downloaded or removed). */
+const shown = new Map<string, Set<() => void>>();
+
+/** Forgets the game's icon, so that it's asked for again everywhere it's shown. */
+export function refreshIcon(gameKey: string) {
+  icons.delete(gameKey);
+  shown.get(gameKey)?.forEach((reload) => reload());
+}
+
 /**
  * The picture an emulator game's disc shows behind it in the console's menu
  * (PS3 and PSP ones have it), or `null`.
@@ -48,6 +57,14 @@ export function GameIcon({ gameKey, name, className, ready, style }: Props) {
   const [small, setSmall] = useState(false);
   // PS3 and PSP icons are logos, about twice as wide as tall.
   const [wide, setWide] = useState(false);
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    const reload = () => setVersion((v) => v + 1);
+    const set = shown.get(gameKey) ?? new Set();
+    shown.set(gameKey, set.add(reload));
+    return () => { set.delete(reload); };
+  }, [gameKey]);
 
   useEffect(() => {
     setIcon(null);
@@ -55,7 +72,7 @@ export function GameIcon({ gameKey, name, className, ready, style }: Props) {
     let current = true;
     cached(icons, gameKey, api.gameIcon).then((i) => current && setIcon(i));
     return () => { current = false; };
-  }, [gameKey, ready]);
+  }, [gameKey, ready, version]);
 
   if (!icon) return <span className={className} style={style}>{initials(name)}</span>;
   return (

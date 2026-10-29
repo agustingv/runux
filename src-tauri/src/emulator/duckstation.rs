@@ -127,13 +127,15 @@ pub(super) fn cover_help(repo: &str) -> HelpSection {
         "Carátula",
         vec![
             text(format!(
-                "Los discos no traen imágenes, así que Runux descarga la carátula de la colección `xlenore/{repo}` \
-                 de GitHub la primera vez que muestra el juego, y la guarda en `{cache}`. La busca por el código \
-                 del disco, que lee del propio disco, del nombre del archivo o, si no, de su título."
+                "Los discos no traen imágenes, así que la carátula se descarga de la colección `xlenore/{repo}` \
+                 de GitHub. Runux no se conecta por su cuenta: en la página del juego, pulsa «Descargar \
+                 carátula». Solo se envía el código del disco, y la imagen se guarda en `{cache}`; «Quitar» la \
+                 borra."
             )),
             text(
-                "Si sale con sus iniciales, añade el código entre corchetes al nombre del archivo, como \
-                 `Juego [SLES-02529].chd`, y vuelve a abrir Runux.",
+                "El código lo lee del propio disco, del nombre del archivo o, si no, del título. Si el botón no \
+                 aparece, Runux no ha sabido cuál es: añádelo entre corchetes al nombre del archivo, como \
+                 `Juego [SLES-02529].chd`.",
             ),
         ],
     )

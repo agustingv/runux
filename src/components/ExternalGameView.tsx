@@ -1,9 +1,11 @@
-import { type EmulatorInfo, type ExternalGame, type Runner } from "../api";
+import { useEffect, useState } from "react";
+import { api, errorMessage, type CoverInfo, type EmulatorInfo, type ExternalGame, type Runner } from "../api";
 import { EnvEditor } from "./EnvEditor";
 import { EmulatorTroubleshooting, Troubleshooting } from "./Troubleshooting";
 import { FolderIcon } from "../icons";
 import { Banner, SimplePlayButton } from "./GameParts";
 import { externalKey } from "./Sidebar";
+import { refreshIcon } from "./GameIcon";
 
 interface Props {
   game: ExternalGame;
@@ -20,6 +22,52 @@ interface Props {
   onHelp: () => void;
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
   onSaveSettings: (settings: Record<string, string>) => Promise<void>;
+}
+
+/**
+ * The box art of a game whose disc carries no pictures (PS1, PS2): only
+ * downloaded when the player asks, as Runux never connects on its own.
+ */
+function CoverRow({ game }: { game: ExternalGame }) {
+  const [info, setInfo] = useState<CoverInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInfo(null);
+    setError(null);
+    api.coverInfo(game.id).then(setInfo).catch(() => setInfo(null));
+  }, [game.id]);
+
+  if (!info) return null;
+  const run = (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    action()
+      .then(() => refreshIcon(externalKey(game.id)))
+      .then(() => api.coverInfo(game.id))
+      .then(setInfo)
+      .catch((e) => setError(errorMessage(e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <>
+      <dt>Carátula</dt>
+      <dd>
+        {info.downloaded ? (
+          <>Descargada · <button className="link-btn" disabled={busy} onClick={() => run(() => api.removeCover(game.id))}>Quitar</button></>
+        ) : (
+          <>
+            <button className="link-btn" disabled={busy} onClick={() => run(() => api.downloadCover(game.id))}>
+              {busy ? "Descargando…" : "Descargar carátula"}
+            </button>
+            <small className="muted"> · De GitHub, buscándola por el código del disco ({info.serial}), lo único que se envía.</small>
+          </>
+        )}
+        {error && <div className="note">{error}</div>}
+      </dd>
+    </>
+  );
 }
 
 const engine = (emulator?: EmulatorInfo) =>
@@ -87,6 +135,7 @@ export function ExternalGameView({
           )}
           <dt>Carpeta</dt>
           <dd className="mono">{game.path}</dd>
+          {emulator && <CoverRow game={game} />}
           <dt>Archivos</dt>
           <dd>{game.imported ? "Importados por la app (se borran al quitar el juego)" : "Carpeta propia (no se borra al quitar el juego)"}</dd>
         </dl>

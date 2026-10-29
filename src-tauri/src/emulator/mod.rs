@@ -106,9 +106,12 @@ pub enum Art {
     Background,
 }
 
-/// Box art to download for a game whose disc carries no pictures.
+/// Box art the player can download for a game whose disc carries no
+/// pictures.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cover {
+    /// The game's serial, which it's looked up by.
+    pub serial: String,
     pub url: String,
     /// Its file in the covers' cache: `<system>/<serial>.jpg`.
     pub file: String,
@@ -119,6 +122,7 @@ impl Cover {
     /// DuckStation and PCSX2 users point their cover downloaders at.
     fn xlenore(repo: &str, system: &str, serial: &str) -> Cover {
         Cover {
+            serial: serial.into(),
             url: format!("https://raw.githubusercontent.com/xlenore/{repo}/main/covers/default/{serial}.jpg"),
             file: format!("{system}/{serial}.jpg"),
         }
@@ -214,8 +218,8 @@ pub trait Emulator: Sync {
         None
     }
 
-    /// Where to download the box art of the game `rom` opens, for systems
-    /// whose discs carry no pictures.
+    /// Where the player can download the box art of the game `rom` opens,
+    /// for systems whose discs carry no pictures.
     fn cover(&self, _rom: &Path) -> Option<Cover> {
         None
     }

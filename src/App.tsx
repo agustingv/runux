@@ -59,8 +59,11 @@ export default function App() {
   };
 
   const removeGame = async (g: ExternalGame) => {
-    const what = g.imported ? " y sus archivos importados" : "";
-    if (!(await ask(`¿Quitar ${g.name}${what}?`, { title: "Quitar juego", kind: "warning" }))) return;
+    const parts = [g.imported && "sus archivos importados", g.kind !== "windows" && "su carátula", "sus registros"].filter(Boolean);
+    const what = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} y ${parts[parts.length - 1]}` : parts[0];
+    const keeps = g.imported ? "" : " Tus archivos del juego no se tocan.";
+    const message = `¿Quitar ${g.name}? Se borran también ${what}, si los tiene.${keeps}`;
+    if (!(await ask(message, { title: "Quitar juego", kind: "warning" }))) return;
     try {
       await api.removeExternalGame(g.id);
       setSelected(HOME);

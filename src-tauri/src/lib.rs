@@ -295,31 +295,24 @@ async fn game_background(key: String) -> Result<Option<String>, String> {
     .map_err(|e| e.to_string())
 }
 
-/// Where a game's icon comes from.
-enum IconSource {
-    /// Read: a data URL.
-    Read(String),
-    /// Box art to download.
-    Cover(emulator::Cover),
-}
-
 /// Data URL of a game's icon: the one in its executable or, for a game run
-/// by an emulator, the one on its disc or its downloaded box art. `key` is
-/// the game's key in the sidebar: a Battle.net uid, `ea:<id>` or `ext:<id>`.
+/// by an emulator, the one on its disc or the box art the player downloaded.
+/// `key` is the game's key in the sidebar: a Battle.net uid, `ea:<id>` or
+/// `ext:<id>`.
 #[tauri::command]
 async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
     let cfg = state.config();
-    let source = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let exe = if let Some(id) = key.strip_prefix("ea:") {
             ea::find_game(&cfg.ea(), id, &[]).ok()?.exe?
         } else if let Some(id) = key.strip_prefix("ext:") {
             let game = external::find(id).ok()?;
             if let Some(emu) = emulator::get(game.kind) {
                 let rom = game.rom.as_deref()?;
-                return match emu.art(rom, emulator::Art::Icon) {
-                    Some(png) => Some(IconSource::Read(data_url("image/png", &png))),
-                    None => emu.cover(rom).map(IconSource::Cover),
-                };
+                if let Some(png) = emu.art(rom, emulator::Art::Icon) {
+                    return Some(data_url("image/png", &png));
+                }
+                return covers::cached(&emu.cover(rom)?).map(|jpeg| data_url("image/jpeg", &jpeg));
             }
             game.exe?
         } else {
@@ -328,15 +321,49 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
             disc::guess_exe(Path::new(&game.local_path))?
         };
         let icon = exeicon::read(&exe)?;
-        Some(IconSource::Read(data_url(icon.mime, &icon.data)))
+        Some(data_url(icon.mime, &icon.data))
     })
     .await
-    .map_err(|e| e.to_string())?;
-    Ok(match source {
-        Some(IconSource::Read(url)) => Some(url),
-        Some(IconSource::Cover(cover)) => covers::get(&cover).await.map(|jpeg| data_url("image/jpeg", &jpeg)),
-        None => None,
+    .map_err(|e| e.to_string())
+}
+
+/// The box art an emulator game can have downloaded.
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+struct CoverInfo {
+    /// The game's serial, the only thing sent to download it.
+    serial: String,
+    downloaded: bool,
+}
+
+/// The cover of the external game `id`, for the systems that have them.
+fn external_cover(id: &str) -> Result<Option<emulator::Cover>, String> {
+    let game = external::find(id)?;
+    Ok(emulator::get(game.kind).zip(game.rom.as_deref()).and_then(|(emu, rom)| emu.cover(rom)))
+}
+
+/// Whether the external game `id` can have box art downloaded, and whether
+/// it has. `None` for games whose discs carry their pictures, or no serial.
+#[tauri::command]
+async fn cover_info(id: String) -> Result<Option<CoverInfo>, String> {
+    tokio::task::spawn_blocking(move || {
+        Ok(external_cover(&id)?.map(|c| CoverInfo { downloaded: covers::is_cached(&c), serial: c.serial }))
     })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Downloads the box art of the external game `id`, when the player asks.
+#[tauri::command]
+async fn download_cover(id: String) -> Result<(), String> {
+    let cover = tokio::task::spawn_blocking(move || external_cover(&id)).await.map_err(|e| e.to_string())??;
+    covers::download(&cover.ok_or("Este juego no tiene carátula que descargar")?).await
+}
+
+#[tauri::command]
+fn remove_cover(id: String) -> Result<(), String> {
+    external_cover(&id)?.map_or(Ok(()), |c| covers::remove(&c))
 }
 
 #[tauri::command]
@@ -519,6 +546,9 @@ pub fn run() {
             open_game_folder,
             game_icon,
             game_background,
+            cover_info,
+            download_cover,
+            remove_cover,
             open_game_logs,
             list_protons,
             install_ge_proton,
