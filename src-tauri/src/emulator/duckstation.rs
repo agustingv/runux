@@ -163,6 +163,27 @@ pub(super) fn bios_help(install: Option<&Install>, program: &str, console: &str,
     )
 }
 
+/// How to give the player `program`'s controller port 1, which starts on
+/// the keyboard. PCSX2 shares it.
+pub(super) fn pad_help(program: &str) -> HelpSection {
+    section(
+        "Mandos",
+        vec![
+            text(format!(
+                "{program} ve los mandos conectados, pero de entrada el jugador 1 se maneja con el teclado. Asígnale \
+                 el mando una vez y valdrá para todos los juegos, también los que lances desde Runux."
+            )),
+            steps([
+                format!("Pulsa «Abrir {program}» en la página de un juego y ve a sus ajustes de controles."),
+                "Elige el puerto 1 y pulsa la asignación automática (Automatic Mapping).".into(),
+                "Elige tu mando en la lista, como `SDL-0: PS4 Controller`. Los botones quedan como en la consola."
+                    .into(),
+            ]),
+            text("Si el mando no sale en la lista, conéctalo antes de abrir el emulador."),
+        ],
+    )
+}
+
 /// Its own fixes, which PCSX2 shares.
 pub(super) fn fixes(program: &str, bios: &str) -> Vec<Fix> {
     vec![
@@ -258,13 +279,13 @@ impl Emulator for Duckstation {
                     ]),
                 ],
             ),
+            pad_help(self.program()),
             section(
                 "Si algo falla",
                 vec![list([
                     "Si se cierra nada más empezar, revisa la BIOS. Para ver el mensaje de error, abre el juego \
                      desde DuckStation (con «Abrir DuckStation»), no desde Runux.",
-                    "Los mandos, los gráficos y el resto de ajustes se configuran en DuckStation, y valen para todos \
-                     sus juegos.",
+                    "Los gráficos y el resto de ajustes se configuran en DuckStation, y valen para todos sus juegos.",
                 ])],
             ),
         ]

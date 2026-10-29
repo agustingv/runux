@@ -61,11 +61,18 @@ impl Emulator for Ppsspp {
                 ])],
             ),
             section(
+                "Mandos",
+                vec![text(
+                    "PPSSPP reconoce la mayoría de mandos, como los de PlayStation o Xbox, sin configurar nada. Si \
+                     alguno no responde o quieres cambiar los botones, ve en PPSSPP a Ajustes → Controles → \
+                     Asignación de controles.",
+                )],
+            ),
+            section(
                 "Si algo falla",
                 vec![list([
                     "Esc abre el menú de PPSSPP, para guardar la partida o salir.",
-                    "Los mandos, los gráficos y el resto de ajustes se configuran en PPSSPP, y valen para todos sus \
-                     juegos.",
+                    "Los gráficos y el resto de ajustes se configuran en PPSSPP, y valen para todos sus juegos.",
                 ])],
             ),
         ]

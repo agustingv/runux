@@ -169,6 +169,25 @@ impl Emulator for Rpcs3 {
                 )],
             ),
             section(
+                "Mandos",
+                vec![
+                    text(
+                        "RPCS3 empieza con el jugador 1 en el teclado. Asígnale el mando una vez y valdrá para todos \
+                         los juegos, también los que lances desde Runux.",
+                    ),
+                    steps([
+                        "Pulsa «Abrir RPCS3» en la página de un juego y luego el botón «Pads» de su barra.",
+                        "En Player 1, cambia Handler de `Keyboard` a `DualShock 4` (o `DualSense`, para uno de PS5) \
+                         y elige el mando en Device.",
+                        "Pulsa «Save».",
+                    ]),
+                    text(
+                        "Si el mando no aparece con ese handler, elige `SDL`, que reconoce casi cualquier mando. Para \
+                         uno de Xbox, `Evdev` o `SDL`.",
+                    ),
+                ],
+            ),
+            section(
                 "Si algo falla",
                 vec![list([
                     format!("RPCS3 apunta lo que pasa en `{log}`, que se reescribe cada vez que lo abres."),
@@ -177,8 +196,7 @@ impl Emulator for Rpcs3 {
                         .into(),
                     "No todos los juegos funcionan igual de bien: su web tiene una lista de compatibilidad por juego."
                         .into(),
-                    "Los mandos, los gráficos y el resto de ajustes se configuran en RPCS3, y valen para todos sus \
-                     juegos."
+                    "Los gráficos y el resto de ajustes se configuran en RPCS3, y valen para todos sus juegos."
                         .into(),
                 ])],
             ),
