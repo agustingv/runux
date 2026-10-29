@@ -2,7 +2,7 @@
 
 use super::program::{Install, Program};
 use crate::help::tilde;
-use super::{check_option, list, option_args, rom, section, steps, text, Emulator, Fix, HelpSection, Media};
+use super::{check_option, list, option_args, playstation, rom, section, steps, text, Cover, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -18,6 +18,9 @@ const PROGRAM: Program = Program {
 
 pub struct Duckstation;
 
+/// Its game list, among its resources.
+const GAMEDB: &str = "gamedb.yaml";
+
 /// Opens `rom`, in `dir`, with `settings` as `-flags`, exiting when the game
 /// powers off (`-batch`). PCSX2 takes the same command line.
 pub(super) fn command(install: &Install, dir: &Path, rom: &Path, settings: &BTreeMap<String, String>) -> Command {
@@ -28,73 +31,11 @@ pub(super) fn command(install: &Install, dir: &Path, rom: &Path, settings: &BTre
     cmd
 }
 
-/// A disc with LibCrypt copy protection, which DuckStation won't start
-/// without its subchannel data.
-#[derive(Debug, PartialEq)]
-struct Protected {
-    serial: String,
-    name: String,
-}
-
-/// The serials (`SLES-02529`) in a file name, which may write them
-/// `sles_025.29`, as on the disc.
-fn serials(name: &str) -> Vec<String> {
-    let b = name.to_ascii_uppercase().into_bytes();
-    let mut found = Vec::new();
-    for i in 0..b.len() {
-        let rest = &b[i..];
-        if (i > 0 && b[i - 1].is_ascii_alphanumeric()) || rest.len() < 9 || !rest[..4].iter().all(u8::is_ascii_uppercase) {
-            continue;
-        }
-        let mut k = if matches!(rest[4], b'-' | b'_' | b' ') { 5 } else { 4 };
-        let mut digits = String::new();
-        while digits.len() < 5 {
-            match rest.get(k) {
-                Some(c) if c.is_ascii_digit() => digits.push(*c as char),
-                Some(b'.') if digits.len() == 3 => {}
-                _ => break,
-            }
-            k += 1;
-        }
-        if digits.len() == 5 && !rest.get(k).is_some_and(u8::is_ascii_digit) {
-            found.push(format!("{}-{digits}", String::from_utf8_lossy(&rest[..4])));
-        }
-    }
-    found
-}
-
-/// The protected game, in DuckStation's `gamedb.yaml`, whose serial is in one
-/// of `names` or whose title is one of them without its extensions.
-fn libcrypt_game(gamedb: &str, names: &[String]) -> Option<Protected> {
-    let wanted: Vec<String> = names.iter().flat_map(|n| serials(n)).collect();
-    let titles: Vec<String> = names.iter().map(|n| n.split('.').next().unwrap_or(n).trim().to_lowercase()).collect();
-    let matches = |codes: &[String], name: &str| {
-        let by_title = || titles.contains(&name.to_lowercase()).then(|| codes[0].clone());
-        codes.iter().find(|c| wanted.contains(c)).cloned().or_else(by_title)
-    };
-    // Entries are `SERIAL:` with indented fields, and more serials under `codes:`.
-    let (mut codes, mut name, mut libcrypt, mut section) = (Vec::<String>::new(), String::new(), false, "");
-    for line in gamedb.lines().chain(["END:"]) {
-        if !line.starts_with(' ') && line.ends_with(':') {
-            if libcrypt {
-                if let Some(serial) = matches(&codes, &name) {
-                    return Some(Protected { serial, name });
-                }
-            }
-            (codes, name, libcrypt) = (vec![line.trim_end_matches(':').to_string()], String::new(), false);
-        } else if let Some(field) = line.strip_prefix("  ").filter(|f| !f.starts_with(' ')) {
-            let (key, value) = field.split_once(':').unwrap_or((field, ""));
-            section = if key == "codes" { "codes" } else { "" };
-            match key {
-                "name" => name = value.trim().trim_matches('"').to_string(),
-                "libcrypt" => libcrypt = value.trim() == "true",
-                _ => {}
-            }
-        } else if let Some(code) = line.trim().strip_prefix("- ").filter(|_| section == "codes") {
-            codes.push(code.trim().to_string());
-        }
-    }
-    None
+/// The game, among the LibCrypt-protected ones in DuckStation's `db`, that
+/// `names` stand for: its title and serial.
+fn libcrypt_game(db: &str, names: &[String]) -> Option<(String, String)> {
+    let entries = playstation::entries(db);
+    playstation::identify(entries.iter().filter(|e| e.libcrypt), names).map(|(e, serial)| (e.name.clone(), serial))
 }
 
 /// Where DuckStation keeps its settings: natively, without
@@ -119,20 +60,14 @@ fn check_libcrypt(install: &Install, game: &ExternalGame, rom: &Path) -> Result<
     let allowed = user_dir(install)
         .and_then(|dir| std::fs::read_to_string(dir.join("settings.ini")).ok())
         .is_some_and(|ini| ini.lines().any(|l| l.replace(' ', "") == "AllowBootingWithoutSBIFile=true"));
-    let gamedb = install.files().and_then(|dir| {
-        ["bin/resources/gamedb.yaml", "resources/gamedb.yaml"].iter().find_map(|f| std::fs::read_to_string(dir.join(f)).ok())
-    });
-    let (Some(gamedb), false) = (gamedb, allowed) else {
+    let (Some(db), false) = (playstation::read_db(install, GAMEDB), allowed) else {
         return Ok(());
     };
-    let names: Vec<String> = [rom.file_name(), game.path.file_name()]
-        .into_iter()
-        .flatten()
-        .map(|n| n.to_string_lossy().into_owned())
-        .collect();
-    match libcrypt_game(&gamedb, &names) {
+    let mut names = playstation::names(rom);
+    names.extend(game.path.file_name().map(|n| n.to_string_lossy().into_owned()));
+    match libcrypt_game(&db, &names) {
         None => Ok(()),
-        Some(Protected { serial, name }) => Err(format!(
+        Some((name, serial)) => Err(format!(
             "«{name}» ({serial}) tiene la protección anticopia LibCrypt, y DuckStation no lo arranca sin el archivo \
              SBI con los datos de subcanal del disco, que no van en la imagen. Consigue el SBI de este juego \
              ({serial}.sbi) y cópialo junto a la imagen con el nombre «{}».",
@@ -184,6 +119,26 @@ pub(super) fn pad_help(program: &str) -> HelpSection {
     )
 }
 
+/// Where the box art of games in xlenore's collection `repo` comes from.
+/// PCSX2 shares it.
+pub(super) fn cover_help(repo: &str) -> HelpSection {
+    let cache = tilde(&crate::config::cache_dir().join("covers"));
+    section(
+        "Carátula",
+        vec![
+            text(format!(
+                "Los discos no traen imágenes, así que Runux descarga la carátula de la colección `xlenore/{repo}` \
+                 de GitHub la primera vez que muestra el juego, y la guarda en `{cache}`. La busca por el código \
+                 del disco, que lee del propio disco, del nombre del archivo o, si no, de su título."
+            )),
+            text(
+                "Si sale con sus iniciales, añade el código entre corchetes al nombre del archivo, como \
+                 `Juego [SLES-02529].chd`, y vuelve a abrir Runux.",
+            ),
+        ],
+    )
+}
+
 /// Its own fixes, which PCSX2 shares.
 pub(super) fn fixes(program: &str, bios: &str) -> Vec<Fix> {
     vec![
@@ -227,6 +182,11 @@ impl Emulator for Duckstation {
              te pide la carpeta donde está."
                 .into(),
         )
+    }
+
+    fn cover(&self, rom: &Path) -> Option<Cover> {
+        let db = PROGRAM.find().and_then(|i| playstation::read_db(&i, GAMEDB));
+        Some(Cover::xlenore("psx-covers", "ps1", &playstation::serial(rom, db.as_deref())?))
     }
 
     fn media(&self) -> Media {
@@ -280,6 +240,7 @@ impl Emulator for Duckstation {
                 ],
             ),
             pad_help(self.program()),
+            cover_help("psx-covers"),
             section(
                 "Si algo falla",
                 vec![list([
@@ -319,14 +280,6 @@ mod tests {
     }
 
     #[test]
-    fn reads_serials_from_file_names() {
-        assert_eq!(serials("Resident Evil 3 - Nemesis (E) [SLES-02529].bin.ecm"), ["SLES-02529"]);
-        assert_eq!(serials("sces_015.64.bin"), ["SCES-01564"]);
-        assert!(serials("Final Fantasy VII (Disc 1).cue").is_empty());
-        assert!(serials("XSLES-025290").is_empty());
-    }
-
-    #[test]
     fn finds_protected_games() {
         let gamedb = "\
 SLES-02529:
@@ -347,10 +300,10 @@ SCES-01564:
       - English
 ";
         let find = |name: &str| libcrypt_game(gamedb, &[name.to_string()]);
-        let re3 = Protected { serial: "SLES-02529".into(), name: "Resident Evil 3 - Nemesis (Europe)".into() };
+        let re3 = ("Resident Evil 3 - Nemesis (Europe)".to_string(), "SLES-02529".to_string());
         assert_eq!(find("Resident Evil 3 - Nemesis (E) [SLES-02529].bin.ecm"), Some(re3));
-        assert_eq!(find("Ape Escape (Europe).cue").map(|g| g.serial), Some("SCES-01564".into()));
-        assert_eq!(find("Ape [SCES-01999].chd").map(|g| g.serial), Some("SCES-01999".into()));
+        assert_eq!(find("Ape Escape (Europe).cue").map(|g| g.1), Some("SCES-01564".into()));
+        assert_eq!(find("Ape [SCES-01999].chd").map(|g| g.1), Some("SCES-01999".into()));
         assert_eq!(find("Resident Evil 3 [SLED-02541].bin"), None);
         assert_eq!(find("English.cue"), None);
     }

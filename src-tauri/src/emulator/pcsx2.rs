@@ -2,9 +2,10 @@
 
 use super::program::{Install, Program};
 use crate::help::tilde;
-use super::{check_option, duckstation, list, rom, section, Emulator, Fix, HelpSection, Media};
+use super::{check_option, duckstation, list, playstation, rom, section, Cover, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
+use std::path::Path;
 use tokio::process::Command;
 
 const PROGRAM: Program = Program { bins: &["pcsx2-qt", "pcsx2"], paths: &[], flatpak: Some("net.pcsx2.PCSX2") };
@@ -40,6 +41,11 @@ impl Emulator for Pcsx2 {
         )
     }
 
+    fn cover(&self, rom: &Path) -> Option<Cover> {
+        let db = PROGRAM.find().and_then(|i| playstation::read_db(&i, "GameIndex.yaml"));
+        Some(Cover::xlenore("ps2-covers", "ps2", &playstation::serial(rom, db.as_deref())?))
+    }
+
     fn media(&self) -> Media {
         Media::image(self.program(), &["iso", "chd", "cso", "zso", "gz", "bin"])
     }
@@ -69,6 +75,7 @@ impl Emulator for Pcsx2 {
                 ])],
             ),
             duckstation::pad_help(self.program()),
+            duckstation::cover_help("ps2-covers"),
             section(
                 "Si algo falla",
                 vec![list([

@@ -33,11 +33,18 @@ de los juegos de Windows (Wine/Proton) está en `src-tauri/src/help.rs`, junto a
 comparten todas las páginas. Para añadir uno: una variante en
 `external::Kind`, un módulo que implemente `Emulator` y su entrada en `emulator::ALL`.
 
+Las imágenes de cada juego salen de su disco cuando las trae (`art()`: `ICON0.PNG` y
+`PIC1.PNG` de PS3 y PSP, leídos de la `.iso` con `iso9660.rs`). Los de PS1 y PS2 no traen
+ninguna, así que `cover()` dice dónde descargar su carátula: de las colecciones de xlenore en
+GitHub, por el código del disco, que `emulator/playstation.rs` saca del `SYSTEM.CNF`, del
+nombre del archivo o del título en la lista de juegos del emulador. Se descargan una vez a
+`~/.cache/runux/covers/`.
+
 ## Rutas
 
 - Configuración: `~/.config/runux/`
 - Prefijos, GE-Proton y juegos: `~/.local/share/runux/`
-- Caché (instaladores): `~/.cache/runux/`
+- Caché (instaladores y carátulas): `~/.cache/runux/`
 - Registros de Proton (`PROTON_LOG=1`): `~/.cache/runux/logs/`, con una carpeta por juego
 
 Las carpetas de la versión anterior (`btn`) se mueven solas al primer arranque y queda un enlace en su lugar.

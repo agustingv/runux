@@ -1,11 +1,16 @@
 //! Reading a file from an ISO 9660 image without mounting it: enough to take
-//! a game's pictures from a PS3 or PSP disc image.
+//! a game's pictures from a PS3 or PSP disc, or the `SYSTEM.CNF` naming a
+//! PS1 or PS2 one. Plain images (`.iso`) hold 2048 bytes per sector; raw CD
+//! images (`.bin`) whole 2352-byte sectors, with the data inside.
 
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
 const SECTOR: u64 = 2048;
+const RAW_SECTOR: u64 = 2352;
+/// How each raw sector starts.
+const SYNC: [u8; 12] = [0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0];
 /// Biggest directory read: a disc's folders hold a few dozen entries.
 const MAX_DIR: u32 = 1 << 20;
 
@@ -20,13 +25,47 @@ fn u32_at(b: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(b.get(at..at + 4)?.try_into().ok()?))
 }
 
-fn read(file: &File, extent: Extent, max: u32) -> Option<Vec<u8>> {
-    if extent.size > max {
-        return None;
+/// An open image.
+struct Image {
+    file: File,
+    /// In a raw image, the bytes before each sector's data: its header, and
+    /// in mode 2 its subheader too.
+    raw: Option<u64>,
+}
+
+impl Image {
+    fn open(path: &Path) -> Option<Image> {
+        let file = File::open(path).ok()?;
+        let mut head = [0; 16];
+        let raw = match file.read_exact_at(&mut head, 16 * RAW_SECTOR) {
+            Ok(()) if head[..12] == SYNC => Some(match head[15] {
+                1 => 16,
+                2 => 24,
+                _ => return None,
+            }),
+            _ => None,
+        };
+        Some(Image { file, raw })
     }
-    let mut buf = vec![0; extent.size as usize];
-    file.read_exact_at(&mut buf, extent.sector as u64 * SECTOR).ok()?;
-    Some(buf)
+
+    /// `len` bytes of data from `sector` on.
+    fn read(&self, sector: u32, len: usize) -> Option<Vec<u8>> {
+        let mut buf = vec![0; len];
+        match self.raw {
+            None => self.file.read_exact_at(&mut buf, sector as u64 * SECTOR).ok()?,
+            Some(skip) => {
+                for (i, chunk) in buf.chunks_mut(SECTOR as usize).enumerate() {
+                    let at = (sector as u64 + i as u64) * RAW_SECTOR + skip;
+                    self.file.read_exact_at(chunk, at).ok()?;
+                }
+            }
+        }
+        Some(buf)
+    }
+
+    fn read_extent(&self, extent: Extent, max: u32) -> Option<Vec<u8>> {
+        (extent.size <= max).then(|| self.read(extent.sector, extent.size as usize))?
+    }
 }
 
 /// The entry `name` of a directory's records, ignoring case and the `;1`
@@ -56,18 +95,17 @@ fn find(dir: &[u8], name: &str) -> Option<Extent> {
 /// The file at `path` (`PS3_GAME/ICON0.PNG`) in the image `iso`, if it's
 /// there and no bigger than `max` bytes.
 pub fn read_file(iso: &Path, path: &str, max: u32) -> Option<Vec<u8>> {
-    let file = File::open(iso).ok()?;
+    let image = Image::open(iso)?;
     // The primary volume descriptor, in sector 16, holds the root's record.
-    let mut pvd = [0; SECTOR as usize];
-    file.read_exact_at(&mut pvd, 16 * SECTOR).ok()?;
+    let pvd = image.read(16, SECTOR as usize)?;
     if pvd[0] != 1 || &pvd[1..6] != b"CD001" {
         return None;
     }
     let mut extent = Extent { sector: u32_at(&pvd, 156 + 2)?, size: u32_at(&pvd, 156 + 10)? };
     for name in path.split('/') {
-        extent = find(&read(&file, extent, MAX_DIR)?, name)?;
+        extent = find(&image.read_extent(extent, MAX_DIR)?, name)?;
     }
-    read(&file, extent, max)
+    image.read_extent(extent, max)
 }
 
 #[cfg(test)]
@@ -103,6 +141,27 @@ mod tests {
         iso[sector(20)..sector(20) + icon.len()].copy_from_slice(&icon);
         iso[sector(21)..sector(21) + 4].copy_from_slice(b"\x89PNG");
         iso
+    }
+
+    /// `iso` as a raw mode 2 image, as PS1 and PS2 CDs are dumped.
+    fn raw(iso: &[u8]) -> Vec<u8> {
+        iso.chunks(SECTOR as usize)
+            .flat_map(|data| {
+                let mut sector = SYNC.to_vec();
+                sector.extend([0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0]);
+                sector.extend(data);
+                sector.resize(RAW_SECTOR as usize, 0);
+                sector
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reads_raw_cd_images() {
+        let path = std::env::temp_dir().join(format!("runux-raw-{}.bin", std::process::id()));
+        std::fs::write(&path, raw(&image())).unwrap();
+        assert_eq!(read_file(&path, "PSP_GAME/ICON0.PNG", 1024).as_deref(), Some(&b"\x89PNG"[..]));
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

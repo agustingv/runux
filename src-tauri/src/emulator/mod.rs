@@ -10,6 +10,7 @@
 mod duckstation;
 mod flycast;
 mod pcsx2;
+mod playstation;
 mod ppsspp;
 mod program;
 mod rpcs3;
@@ -105,6 +106,25 @@ pub enum Art {
     Background,
 }
 
+/// Box art to download for a game whose disc carries no pictures.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cover {
+    pub url: String,
+    /// Its file in the covers' cache: `<system>/<serial>.jpg`.
+    pub file: String,
+}
+
+impl Cover {
+    /// The front cover of `serial` in xlenore's collection `repo`, the one
+    /// DuckStation and PCSX2 users point their cover downloaders at.
+    fn xlenore(repo: &str, system: &str, serial: &str) -> Cover {
+        Cover {
+            url: format!("https://raw.githubusercontent.com/xlenore/{repo}/main/covers/default/{serial}.jpg"),
+            file: format!("{system}/{serial}.jpg"),
+        }
+    }
+}
+
 /// Biggest picture read: a PS3 background is a few MB.
 const MAX_ART: u32 = 16 << 20;
 
@@ -191,6 +211,12 @@ pub trait Emulator: Sync {
     /// The picture `which` of the game `rom` opens, as a PNG, if its disc or
     /// folder has one.
     fn art(&self, _rom: &Path, _which: Art) -> Option<Vec<u8>> {
+        None
+    }
+
+    /// Where to download the box art of the game `rom` opens, for systems
+    /// whose discs carry no pictures.
+    fn cover(&self, _rom: &Path) -> Option<Cover> {
         None
     }
 
