@@ -1,7 +1,7 @@
 //! ScummVM, which runs classic adventure games from their original files.
 
 use super::program::{Install, Program};
-use super::{option_args, Emulator, Fix, Media};
+use super::{list, option_args, section, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use crate::task::Task;
 use crate::{host, wine};
@@ -55,6 +55,36 @@ impl Emulator for Scummvm {
             "La ventana del juego es muy pequeña",
             "Abre el juego a pantalla completa. Alt+Intro cambia entre ventana y pantalla completa mientras juegas.",
         )]
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        vec![
+            section(
+                "Qué es",
+                vec![text(
+                    "ScummVM sustituye al programa original de muchas aventuras gráficas clásicas (Monkey Island, \
+                     Blade Runner, Broken Sword…) y las ejecuta a partir de sus archivos de datos, sin Wine.",
+                )],
+            ),
+            section(
+                "Qué añadir",
+                vec![list([
+                    "La carpeta con los archivos del juego, copiados del CD o de una instalación.",
+                    "Las imágenes `.iso` de sus CD: Runux extrae los archivos a su carpeta de juegos.",
+                    "Si el juego venía en varios CD, añade todas sus imágenes a la vez, o junta el contenido de todos \
+                     en una carpeta.",
+                    "ScummVM reconoce el juego y su idioma por sus archivos. Si no lo reconoce, puede que falten \
+                     archivos o que no esté entre los juegos que soporta: su web los lista.",
+                ])],
+            ),
+            section(
+                "Mientras juegas",
+                vec![list([
+                    "Ctrl+F5 abre el menú de ScummVM, para guardar, cargar o salir.",
+                    "Alt+Intro cambia entre ventana y pantalla completa.",
+                ])],
+            ),
+        ]
     }
 
     fn command(&self, game: &ExternalGame, settings: &BTreeMap<String, String>) -> Result<Command, String> {

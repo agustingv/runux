@@ -7,6 +7,7 @@ mod ea;
 mod emulator;
 mod exeicon;
 mod external;
+mod help;
 mod host;
 mod productdb;
 mod proton;
@@ -51,6 +52,8 @@ struct Status {
     battlenet_running: bool,
     /// The emulators, installed or not.
     emulators: Vec<emulator::EmulatorInfo>,
+    /// The help page for Windows games.
+    windows_help: Vec<help::HelpSection>,
     ea_installed: bool,
     ea_running: bool,
     /// The EA app's in-game overlay; `None` before anyone signs in.
@@ -107,6 +110,7 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
         battlenet_installed: battlenet::installed(cfg),
         battlenet_running: battlenet::running(cmdlines),
         emulators: emulator::infos(),
+        windows_help: help::windows(cfg),
         ea_installed: ea::installed(&cfg.ea()),
         ea_running: ea::running(cmdlines),
         ea_overlay: ea::overlay_enabled(&cfg.ea()),

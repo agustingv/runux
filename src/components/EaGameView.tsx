@@ -18,9 +18,10 @@ interface Props {
   uninstalling: boolean;
   onUninstall: () => void;
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
+  onHelp: () => void;
 }
 
-export function EaGameView({ game, runner, launching, eaRunning, eaOverlay, onSetEaOverlay, onPlay, onOpenFolder, uninstalling, onUninstall, onSaveEnv }: Props) {
+export function EaGameView({ game, runner, launching, eaRunning, eaOverlay, onSetEaOverlay, onPlay, onOpenFolder, uninstalling, onUninstall, onSaveEnv, onHelp }: Props) {
   return (
     <div className="game-view">
       <Banner gameKey={eaKey(game.id)} name={game.name} accent={game.accent} ready />
@@ -65,6 +66,7 @@ export function EaGameView({ game, runner, launching, eaRunning, eaOverlay, onSe
           logKey={eaKey(game.id)}
           onSaveEnv={onSaveEnv}
           eaOverlay={{ enabled: eaOverlay, onSet: onSetEaOverlay }}
+          onHelp={onHelp}
         />
         <EnvEditor
           key={game.id}

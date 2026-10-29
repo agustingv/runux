@@ -16,6 +16,8 @@ interface Props {
   onRemove: () => void;
   /** Opens the emulator on its own, to set it up. */
   onOpenEmulator: () => void;
+  /** Shows the help of its system or, for a Windows game, Wine/Proton's. */
+  onHelp: () => void;
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
   onSaveSettings: (settings: Record<string, string>) => Promise<void>;
 }
@@ -26,7 +28,7 @@ const engine = (emulator?: EmulatorInfo) =>
   : `${emulator.system} (${emulator.program})`;
 
 export function ExternalGameView({
-  game, emulator, runner, launching, onPlay, onOpenFolder, onRemove, onOpenEmulator, onSaveEnv, onSaveSettings,
+  game, emulator, runner, launching, onPlay, onOpenFolder, onRemove, onOpenEmulator, onHelp, onSaveEnv, onSaveSettings,
 }: Props) {
   return (
     <div className="game-view">
@@ -54,7 +56,12 @@ export function ExternalGameView({
             {emulator.installHint ? <>Instálalo con <code>{emulator.installHint}</code>.</> : "Instálalo con el gestor de paquetes de tu distribución."}
           </p>
         )}
-        {emulator?.setup && <p className="muted small">{emulator.setup}</p>}
+        {emulator && (
+          <p className="muted small">
+            {emulator.setup && <>{emulator.setup} </>}
+            <button className="link-btn" onClick={onHelp}>Ayuda de {emulator.system}</button>
+          </p>
+        )}
         <dl>
           <dt>Estado</dt>
           <dd>{game.running ? "En ejecución" : "Listo para jugar"}</dd>
@@ -89,7 +96,7 @@ export function ExternalGameView({
           )
         ) : (
           <>
-            <Troubleshooting runner={runner} env={game.env} logKey={externalKey(game.id)} onSaveEnv={onSaveEnv} />
+            <Troubleshooting runner={runner} env={game.env} logKey={externalKey(game.id)} onSaveEnv={onSaveEnv} onHelp={onHelp} />
             <EnvEditor key={game.id} env={game.env} onSave={onSaveEnv} />
           </>
         )}

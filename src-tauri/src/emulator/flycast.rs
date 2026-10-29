@@ -1,7 +1,8 @@
 //! Flycast, the Dreamcast emulator.
 
 use super::program::{Install, Program};
-use super::{is_word, rom, Emulator, Fix, Media};
+use crate::help::tilde;
+use super::{is_word, list, rom, section, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -60,6 +61,42 @@ impl Emulator for Flycast {
             value: "yes".into(),
             default: true,
         }]
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        let data = PROGRAM.find_or_flatpak().and_then(|i| i.data_dir("flycast"));
+        let data = data.map(|d| tilde(&d)).unwrap_or_else(|| "su carpeta de datos".into());
+        vec![
+            section(
+                "Antes de jugar",
+                vec![text(format!(
+                    "Flycast no necesita la BIOS de la Dreamcast: trae su propio sustituto. Si un juego falla con él, \
+                     copia `dc_boot.bin` y `dc_flash.bin`, volcados de tu consola, a `{data}`."
+                ))],
+            ),
+            section(
+                "Qué imagen añadir",
+                vec![list([
+                    "Un `.gdi`, con los archivos de sus pistas al lado. Si se llama `disc.gdi`, Runux toma el \
+                     nombre del juego de su carpeta."
+                        .to_string(),
+                    "Un `.chd`: el disco entero comprimido en un solo archivo.".into(),
+                    "Un `.cdi` o un `.cue`.".into(),
+                ])],
+            ),
+            section(
+                "Si algo falla",
+                vec![list([
+                    "Si el juego va demasiado rápido, es por la frecuencia de tu pantalla: tiene arreglo en \
+                     «Solución de problemas», en la página del juego."
+                        .to_string(),
+                    format!("Las partidas guardadas en la VMU están en `{data}`."),
+                    "Los mandos, los gráficos y el resto de ajustes se configuran en Flycast, y valen para todos sus \
+                     juegos."
+                        .into(),
+                ])],
+            ),
+        ]
     }
 
     /// Flycast reads `-config` as `section:key=value,...`, so neither part may

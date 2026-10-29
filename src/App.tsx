@@ -1,16 +1,17 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
-import { api, eaUninstallTask, errorMessage, TASK, uninstallTask, type AddGameRequest, type Config, type EaGame, type ExternalGame, type Game } from "./api";
+import { api, eaUninstallTask, errorMessage, TASK, uninstallTask, type AddGameRequest, type Config, type EaGame, type ExternalGame, type ExternalKind, type Game } from "./api";
 import { AddGame } from "./components/AddGame";
 import { Console } from "./components/Console";
 import { ExternalGameView } from "./components/ExternalGameView";
+import { Help } from "./components/Help";
 import { GameView } from "./components/GameView";
 import { Home } from "./components/Home";
 import { Settings } from "./components/Settings";
 import { Setup } from "./components/Setup";
 import { EaGameView } from "./components/EaGameView";
 import { eaKey, externalKey, HOME, Sidebar } from "./components/Sidebar";
-import { GearIcon, TerminalIcon } from "./icons";
+import { GearIcon, HelpIcon, TerminalIcon } from "./icons";
 import { useLauncher } from "./useLauncher";
 
 export default function App() {
@@ -19,6 +20,8 @@ export default function App() {
   const [selected, setSelected] = useState(HOME);
   const [showConsole, setShowConsole] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  /** The system whose help is shown over the selected page. */
+  const [help, setHelp] = useState<ExternalKind | null>(null);
   const {
     status, games, external, eaGames, busy, launching, progress, logs, error,
     setError, clearLogs, refresh, runTask, startTask, play, cancel, clearProgress, guard,
@@ -89,6 +92,12 @@ export default function App() {
   const game = games.find((g) => g.uid === selected);
   const ext = external.find((g) => externalKey(g.id) === selected);
   const eaGame = eaGames.find((g) => eaKey(g.id) === selected);
+  const select = (key: string) => {
+    setHelp(null);
+    setSelected(key);
+  };
+  /** The help of the game's system; Windows games' for any other page. */
+  const toggleHelp = () => setHelp((shown) => (shown ? null : ext?.kind ?? "windows"));
 
   return (
     <div className="app">
@@ -103,6 +112,11 @@ export default function App() {
             </span>
           )}
           {status?.eaRunning && <span className="pill on">EA app abierta</span>}
+          {status && (
+            <button className={`icon-btn ${help ? "active" : ""}`} onClick={toggleHelp} title="Ayuda">
+              <HelpIcon />
+            </button>
+          )}
           <button
             className={`icon-btn ${showConsole ? "active" : ""}`}
             onClick={() => setShowConsole((v) => !v)}
@@ -123,7 +137,7 @@ export default function App() {
           emulators={status?.emulators ?? []}
           eaGames={eaGames}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={select}
           onAddGame={() => setShowAddGame(true)}
         />
 
@@ -137,6 +151,8 @@ export default function App() {
 
           {!status ? (
             <div className="muted center">Cargando…</div>
+          ) : help ? (
+            <Help emulators={status.emulators} windowsHelp={status.windowsHelp} kind={help} onSelect={setHelp} onClose={() => setHelp(null)} />
           ) : eaGame ? (
             <EaGameView
               game={eaGame}
@@ -156,6 +172,7 @@ export default function App() {
                 await api.setEaGameEnv(eaGame.id, env);
                 refresh();
               }}
+              onHelp={() => setHelp("windows")}
             />
           ) : ext ? (
             <ExternalGameView
@@ -167,6 +184,7 @@ export default function App() {
               onOpenFolder={guard(() => api.openExternalFolder(ext.id))}
               onRemove={() => removeGame(ext)}
               onOpenEmulator={guard(() => api.openEmulator(ext.kind))}
+              onHelp={() => setHelp(ext.kind)}
               onSaveEnv={async (env) => {
                 await api.setExternalEnv(ext.id, env);
                 refresh();
@@ -215,7 +233,7 @@ export default function App() {
                 await api.closeBattlenet();
                 refresh();
               })}
-              onSelect={setSelected}
+              onSelect={select}
               ea={{
                 starting: busy.has(TASK.ea) && !status.eaRunning,
                 installing: busy.has(TASK.eaInstaller),
