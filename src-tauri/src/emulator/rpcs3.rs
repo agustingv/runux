@@ -2,7 +2,7 @@
 
 use super::program::{Install, Program};
 use crate::help::tilde;
-use super::{image_name, list, option_args, rom, section, steps, text, Emulator, Fix, HelpSection, Media};
+use super::{file_art, image_name, is_iso, iso_art, list, Art, option_args, rom, section, steps, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -213,9 +213,23 @@ impl Emulator for Rpcs3 {
         game_root(rom)
     }
 
+    /// `ICON0.PNG` and `PIC1.PNG`, in `PS3_GAME/` on a disc, at the top of a
+    /// PlayStation Store game's folder.
+    fn art(&self, rom: &Path, which: Art) -> Option<Vec<u8>> {
+        let name = match which {
+            Art::Icon => "ICON0.PNG",
+            Art::Background => "PIC1.PNG",
+        };
+        if is_iso(rom) {
+            return iso_art(rom, &format!("PS3_GAME/{name}"));
+        }
+        let root = game_root(rom);
+        [root.join("PS3_GAME").join(name), root.join(name)].iter().find_map(|p| file_art(p))
+    }
+
     /// The title in the game's `PARAM.SFO`, else the folder's or image's name.
     fn game_name(&self, rom: &Path) -> Option<String> {
-        if rom.extension().is_some_and(|e| e.eq_ignore_ascii_case("iso")) {
+        if is_iso(rom) {
             return image_name(rom);
         }
         let root = game_root(rom);

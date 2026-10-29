@@ -1,16 +1,34 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api, initials } from "../api";
 
-/** Icons by game key, asked for once per session. */
-const cache = new Map<string, Promise<string | null>>();
+/** Pictures by game key, asked for once per session. */
+const icons = new Map<string, Promise<string | null>>();
+const backgrounds = new Map<string, Promise<string | null>>();
 
-function iconOf(gameKey: string): Promise<string | null> {
-  let icon = cache.get(gameKey);
-  if (!icon) {
-    icon = api.gameIcon(gameKey).catch(() => null);
-    cache.set(gameKey, icon);
+function cached(cache: Map<string, Promise<string | null>>, gameKey: string, get: (key: string) => Promise<string | null>) {
+  let picture = cache.get(gameKey);
+  if (!picture) {
+    picture = get(gameKey).catch(() => null);
+    cache.set(gameKey, picture);
   }
-  return icon;
+  return picture;
+}
+
+/**
+ * The picture an emulator game's disc shows behind it in the console's menu
+ * (PS3 and PSP ones have it), or `null`.
+ */
+export function useGameBackground(gameKey: string): string | null {
+  const [background, setBackground] = useState<string | null>(null);
+  useEffect(() => {
+    setBackground(null);
+    // Only games added by hand can be emulator games.
+    if (!gameKey.startsWith("ext:")) return;
+    let current = true;
+    cached(backgrounds, gameKey, api.gameBackground).then((b) => current && setBackground(b));
+    return () => { current = false; };
+  }, [gameKey]);
+  return background;
 }
 
 interface Props {
@@ -23,24 +41,34 @@ interface Props {
   style?: CSSProperties;
 }
 
-/** The icon in the game's executable, or its initials without one. */
+/** The icon in the game's executable or on its disc, or its initials without one. */
 export function GameIcon({ gameKey, name, className, ready, style }: Props) {
   const [icon, setIcon] = useState<string | null>(null);
   // Old games only carry 32 or 48 px icons, which blur when scaled up.
   const [small, setSmall] = useState(false);
+  // PS3 and PSP icons are logos, about twice as wide as tall.
+  const [wide, setWide] = useState(false);
 
   useEffect(() => {
     setIcon(null);
     if (!ready) return;
     let current = true;
-    iconOf(gameKey).then((i) => current && setIcon(i));
+    cached(icons, gameKey, api.gameIcon).then((i) => current && setIcon(i));
     return () => { current = false; };
   }, [gameKey, ready]);
 
   if (!icon) return <span className={className} style={style}>{initials(name)}</span>;
   return (
-    <span className={`${className} has-icon ${small ? "small" : ""}`}>
-      <img src={icon} alt="" onLoad={(e) => setSmall(e.currentTarget.naturalWidth < 128)} />
+    <span className={`${className} has-icon ${small ? "small" : ""} ${wide ? "wide" : ""}`}>
+      <img
+        src={icon}
+        alt=""
+        onLoad={(e) => {
+          const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+          setSmall(w < 128);
+          setWide(w > h * 1.3);
+        }}
+      />
     </span>
   );
 }

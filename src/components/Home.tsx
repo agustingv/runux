@@ -172,7 +172,7 @@ export function Home({
             <h3 className="section-title">{title}</h3>
             <div className="grid">
               {list.map((g) => (
-                <GameTile key={g.id} gameKey={externalKey(g.id)} name={g.name} accent={g.accent} ready={g.kind === "windows"} state={readiness(g)} onClick={() => onSelect(externalKey(g.id))} />
+                <GameTile key={g.id} gameKey={externalKey(g.id)} name={g.name} accent={g.accent} ready state={readiness(g)} onClick={() => onSelect(externalKey(g.id))} />
               ))}
             </div>
           </Fragment>

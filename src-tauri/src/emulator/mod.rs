@@ -96,6 +96,39 @@ impl Fix {
     }
 }
 
+/// A picture a game carries for the console's menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Art {
+    /// Its icon or logo: PS3 and PSP ones are wider than tall.
+    Icon,
+    /// The full-screen picture shown behind it.
+    Background,
+}
+
+/// Biggest picture read: a PS3 background is a few MB.
+const MAX_ART: u32 = 16 << 20;
+
+/// `data` if it's a PNG, the only kind the UI is given.
+fn png(data: Vec<u8>) -> Option<Vec<u8>> {
+    data.starts_with(b"\x89PNG\r\n\x1a\n").then_some(data)
+}
+
+/// The PNG at `path` in a disc image.
+fn iso_art(iso: &Path, path: &str) -> Option<Vec<u8>> {
+    png(crate::iso9660::read_file(iso, path, MAX_ART)?)
+}
+
+/// The PNG file at `path`.
+fn file_art(path: &Path) -> Option<Vec<u8>> {
+    let size = std::fs::metadata(path).ok()?.len();
+    png(std::fs::read(path).ok().filter(|_| size <= MAX_ART as u64)?)
+}
+
+/// Whether `rom` is an `.iso` image.
+fn is_iso(rom: &Path) -> bool {
+    rom.extension().is_some_and(|e| e.eq_ignore_ascii_case("iso"))
+}
+
 /// An emulator as the UI sees it.
 #[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -153,6 +186,12 @@ pub trait Emulator: Sync {
     fn running_marker(&self, game: &ExternalGame) -> String {
         let rom = game.rom.as_deref().unwrap_or(&game.path);
         format!("{} ", rom.to_string_lossy().to_lowercase())
+    }
+
+    /// The picture `which` of the game `rom` opens, as a PNG, if its disc or
+    /// folder has one.
+    fn art(&self, _rom: &Path, _which: Art) -> Option<Vec<u8>> {
+        None
     }
 
     /// The name `rom` (an image or game folder) suggests for the game.
@@ -296,6 +335,12 @@ mod tests {
         assert_eq!(help, "Un .gdi, .cdi o .chd. Se abre con Flycast desde donde está; no se copia.");
         let Media::File { help, .. } = Media::image("X", &["iso"]) else { unreachable!() };
         assert!(help.starts_with("Un .iso. "));
+    }
+
+    #[test]
+    fn takes_only_pngs() {
+        assert!(png(b"\x89PNG\r\n\x1a\nrest".to_vec()).is_some());
+        assert!(png(b"PAM picture".to_vec()).is_none());
     }
 
     #[test]

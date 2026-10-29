@@ -32,7 +32,7 @@ export function ExternalGameView({
 }: Props) {
   return (
     <div className="game-view">
-      <Banner gameKey={externalKey(game.id)} name={game.name} accent={game.accent} ready={game.kind === "windows"} />
+      <Banner gameKey={externalKey(game.id)} name={game.name} accent={game.accent} ready />
 
       <section className="play-bar">
         <SimplePlayButton running={game.running} launching={launching} onPlay={onPlay} />

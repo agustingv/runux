@@ -26,7 +26,7 @@ export function Sidebar({ games, external, emulators, eaGames, selected, onSelec
       gameKey={externalKey(g.id)}
       name={g.name}
       accent={g.accent}
-      ready={g.kind === "windows"}
+      ready
       active={selected === externalKey(g.id)}
       onSelect={() => onSelect(externalKey(g.id))}
     >
