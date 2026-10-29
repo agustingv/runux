@@ -51,6 +51,8 @@ interface Props {
   onSaveEnv: (env: Record<string, string>) => Promise<void>;
   /** The EA app's in-game overlay, for EA games; `null` before signing in. */
   eaOverlay?: { enabled: boolean | null; onSet: (enabled: boolean) => Promise<void> };
+  /** Shows the help for Windows games. */
+  onHelp: () => void;
 }
 
 function Fix({ symptom, explanation, on, onToggle }: {
@@ -79,7 +81,7 @@ function Fix({ symptom, explanation, on, onToggle }: {
 }
 
 /** Known problems by symptom, each with a switch that applies its fix. */
-export function Troubleshooting({ runner, env, logKey, onSaveEnv, eaOverlay }: Props) {
+export function Troubleshooting({ runner, env, logKey, onSaveEnv, eaOverlay, onHelp }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const run = (fn: () => Promise<void>) => {
@@ -144,7 +146,8 @@ export function Troubleshooting({ runner, env, logKey, onSaveEnv, eaOverlay }: P
       </ul>
       {error && <p className="note">{error}</p>}
       <p className="muted small">
-        Los interruptores añaden o quitan variables en el editor de abajo. Se aplican la próxima vez que lances el juego.
+        Los interruptores añaden o quitan variables en el editor de abajo. Se aplican la próxima vez que lances el juego.{" "}
+        <button className="link-btn" onClick={onHelp}>Ayuda de los juegos de Windows</button>
       </p>
     </div>
   );

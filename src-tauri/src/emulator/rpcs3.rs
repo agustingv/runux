@@ -1,7 +1,8 @@
 //! RPCS3, the PlayStation 3 emulator.
 
 use super::program::{Install, Program};
-use super::{image_name, option_args, rom, Emulator, Fix, Media};
+use crate::help::tilde;
+use super::{image_name, list, option_args, rom, section, steps, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -125,6 +126,63 @@ impl Emulator for Rpcs3 {
 
     fn fixes(&self) -> Vec<Fix> {
         vec![Fix::flag("--fullscreen", "La ventana del juego es muy pequeña", "Abre el juego a pantalla completa.")]
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        let install = PROGRAM.find_or_flatpak();
+        let at = |dir: Option<PathBuf>, file: &str| dir.map(|d| tilde(&d.join(file))).unwrap_or_else(|| file.into());
+        let games = at(install.as_ref().and_then(|i| i.config_dir("rpcs3")), "dev_hdd0/game");
+        let log = at(install.as_ref().and_then(|i| i.cache_dir("rpcs3")), "RPCS3.log");
+        vec![
+            section(
+                "Antes de jugar: el firmware",
+                vec![
+                    text(
+                        "RPCS3 necesita el firmware de la PlayStation 3, el sistema de la consola, que Sony ofrece \
+                         gratis. Sin él los juegos se quedan bloqueados; Runux te avisa si falta.",
+                    ),
+                    steps([
+                        "Descarga `PS3UPDAT.PUP` de la web de PlayStation: busca «actualización del software del \
+                         sistema PS3».",
+                        "Pulsa «Abrir RPCS3» en la página de un juego y, en su menú, File → Install Firmware. Elige \
+                         el archivo y espera a que termine.",
+                    ]),
+                ],
+            ),
+            section(
+                "Qué añadir",
+                vec![list([
+                    "La carpeta de un juego de disco: la que contiene `PS3_GAME`.".to_string(),
+                    "Su `EBOOT.BIN`, si es más cómodo: Runux sube hasta la carpeta del juego.".into(),
+                    "Una `.iso` del disco. Si RPCS3 no la abre, extrae su contenido a una carpeta y añade esa.".into(),
+                    format!(
+                        "Un juego de la PlayStation Store (`.pkg`): instálalo antes en RPCS3, con File → Install \
+                         Packages/Raps/Edats junto a su licencia `.rap`, y añade su carpeta, en `{games}`."
+                    ),
+                ])],
+            ),
+            section(
+                "La primera vez",
+                vec![text(
+                    "La primera vez que abres un juego, RPCS3 compila su código para tu procesador y puede tardar \
+                     varios minutos en mostrar nada. Las siguientes veces arranca mucho antes.",
+                )],
+            ),
+            section(
+                "Si algo falla",
+                vec![list([
+                    format!("RPCS3 apunta lo que pasa en `{log}`, que se reescribe cada vez que lo abres."),
+                    "Avisos como «Failed to lock sudo memory» piden subir el límite de memoria bloqueada del sistema \
+                     (`memlock`). Suelen afectar solo un poco al rendimiento."
+                        .into(),
+                    "No todos los juegos funcionan igual de bien: su web tiene una lista de compatibilidad por juego."
+                        .into(),
+                    "Los mandos, los gráficos y el resto de ajustes se configuran en RPCS3, y valen para todos sus \
+                     juegos."
+                        .into(),
+                ])],
+            ),
+        ]
     }
 
     fn command(&self, game: &ExternalGame, settings: &BTreeMap<String, String>) -> Result<Command, String> {

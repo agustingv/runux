@@ -1,7 +1,8 @@
 //! PCSX2, the PlayStation 2 emulator.
 
 use super::program::{Install, Program};
-use super::{check_option, duckstation, rom, Emulator, Fix, Media};
+use crate::help::tilde;
+use super::{check_option, duckstation, list, rom, section, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use tokio::process::Command;
@@ -45,6 +46,39 @@ impl Emulator for Pcsx2 {
 
     fn fixes(&self) -> Vec<Fix> {
         duckstation::fixes(self.program(), "PlayStation 2")
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        let install = PROGRAM.find_or_flatpak();
+        let config = install.as_ref().and_then(|i| i.config_dir("PCSX2"));
+        let memcards = config.as_ref().map(|c| tilde(&c.join("memcards"))).unwrap_or_else(|| "memcards".into());
+        vec![
+            duckstation::bios_help(
+                install.as_ref(),
+                self.program(),
+                "PlayStation 2",
+                "La web de PCSX2 explica cómo volcarla con un programa que se ejecuta en la propia consola.",
+                config.map(|c| c.join("bios")),
+            ),
+            section(
+                "Qué imagen añadir",
+                vec![list([
+                    "Una `.iso` del DVD. Runux no lee el disco del lector: haz antes una imagen de él.".to_string(),
+                    "Un `.chd`, `.cso` o `.zso`: el disco comprimido, que ocupa bastante menos.".into(),
+                    "Un `.bin` de los pocos juegos que venían en CD.".into(),
+                ])],
+            ),
+            section(
+                "Si algo falla",
+                vec![list([
+                    "Si va lento o se ve mal, prueba en los ajustes de gráficos de PCSX2 otro renderizador (Vulkan u \
+                     OpenGL) o menos resolución.".to_string(),
+                    format!("Las tarjetas de memoria las crea PCSX2 solo; las partidas guardadas están en `{memcards}`."),
+                    "Los mandos, los gráficos y el resto de ajustes se configuran en PCSX2, y valen para todos sus \
+                     juegos.".into(),
+                ])],
+            ),
+        ]
     }
 
     fn check_setting(&self, key: &str, value: &str) -> Result<(), String> {

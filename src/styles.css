@@ -349,3 +349,15 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
   flex: 1; min-width: 0; margin: 0; padding: 8px 10px; overflow-x: auto; border-radius: 4px;
   background: var(--inset); font-size: 12px; white-space: pre;
 }
+
+.help { padding: 32px 40px; display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.help-header { display: flex; align-items: center; justify-content: space-between; }
+.help-header h1 { margin: 0; font-size: 24px; }
+.help > p { margin: 0; line-height: 1.5; }
+.help-section h2 { margin: 0 0 10px; font-size: 16px; }
+.help-section p, .help-section ol, .help-section ul { margin: 0; line-height: 1.55; }
+.help-section > * + * { margin-top: 10px; }
+.help-section ol, .help-section ul { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.help-section code { word-break: break-all; }
+.help-pages { flex-wrap: wrap; }
+.help-pages button { flex: 1 0 auto; padding: 0 12px; }

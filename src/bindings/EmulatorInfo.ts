@@ -2,6 +2,7 @@
 import type { EmulatorFix } from "./EmulatorFix";
 import type { EmulatorMedia } from "./EmulatorMedia";
 import type { ExternalKind } from "./ExternalKind";
+import type { HelpSection } from "./HelpSection";
 
 /**
  * An emulator as the UI sees it.
@@ -18,4 +19,8 @@ installHint: string | null,
 /**
  * What to set up in it before playing (a BIOS, firmware…), if anything.
  */
-setup: string | null, media: EmulatorMedia, fixes: Array<EmulatorFix>, };
+setup: string | null, media: EmulatorMedia, fixes: Array<EmulatorFix>, 
+/**
+ * Its help page: setting it up, what to add, known problems.
+ */
+help: Array<HelpSection>, };

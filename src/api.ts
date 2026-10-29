@@ -12,6 +12,8 @@ export type { DiscSession } from "./bindings/DiscSession";
 export type { EaGame } from "./bindings/EaGame";
 export type { EmulatorFix } from "./bindings/EmulatorFix";
 export type { EmulatorInfo } from "./bindings/EmulatorInfo";
+export type { HelpBlock } from "./bindings/HelpBlock";
+export type { HelpSection } from "./bindings/HelpSection";
 export type { ExternalGame } from "./bindings/ExternalGame";
 export type { ExternalGameEntry } from "./bindings/ExternalGameEntry";
 export type { ExternalKind } from "./bindings/ExternalKind";

@@ -35,6 +35,11 @@ impl Program {
         flatpak_dir(id).map(|_| Install::Flatpak(id))
     }
 
+    /// How it's installed or, for its help, how it would be: from Flathub.
+    pub fn find_or_flatpak(&self) -> Option<Install> {
+        self.find().or(self.flatpak.map(Install::Flatpak))
+    }
+
     /// The command that installs it from Flathub, the same everywhere.
     pub fn flatpak_hint(&self) -> Option<String> {
         self.flatpak.map(|id| format!("flatpak install flathub {id}"))
@@ -60,15 +65,37 @@ impl Install {
         }
     }
 
+    /// Whether it's the Flatpak, which only sees its own folders and the
+    /// game's: files it needs (a BIOS) must go in its folder.
+    pub fn is_flatpak(&self) -> bool {
+        matches!(self, Install::Flatpak(_))
+    }
+
     /// The program's settings folder `name`, which a Flatpak keeps in its own
     /// `~/.var/app/<id>/config`.
     pub fn config_dir(&self, name: &str) -> Option<PathBuf> {
+        self.xdg_dir("config", "XDG_CONFIG_HOME", ".config", name)
+    }
+
+    /// Its data folder `name`, as `config_dir`.
+    pub fn data_dir(&self, name: &str) -> Option<PathBuf> {
+        self.xdg_dir("data", "XDG_DATA_HOME", ".local/share", name)
+    }
+
+    /// Its cache folder `name`, as `config_dir`.
+    pub fn cache_dir(&self, name: &str) -> Option<PathBuf> {
+        self.xdg_dir("cache", "XDG_CACHE_HOME", ".cache", name)
+    }
+
+    /// The XDG folder `name`: in `~/.var/app/<id>/<flatpak>` for a Flatpak,
+    /// else in `$<var>` or its default, `~/<default>`.
+    fn xdg_dir(&self, flatpak: &str, var: &str, default: &str, name: &str) -> Option<PathBuf> {
         let home = PathBuf::from(std::env::var_os("HOME")?);
         Some(match self {
-            Install::Flatpak(id) => home.join(".var/app").join(id).join("config").join(name),
-            Install::Native(_) => match std::env::var_os("XDG_CONFIG_HOME") {
-                Some(config) => PathBuf::from(config).join(name),
-                None => home.join(".config").join(name),
+            Install::Flatpak(id) => home.join(".var/app").join(id).join(flatpak).join(name),
+            Install::Native(_) => match std::env::var_os(var) {
+                Some(dir) => PathBuf::from(dir).join(name),
+                None => home.join(default).join(name),
             },
         })
     }

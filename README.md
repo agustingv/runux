@@ -24,10 +24,13 @@ Requisitos: Rust, las dependencias de sistema de Tauri (webkit2gtk-4.1) y Proton
 Cada emulador está en `src-tauri/src/emulator/` e implementa el trait `Emulator`: cómo se
 detecta e instala (`Program`: en el `$PATH` o de Flathub, y a un Flatpak se le da acceso de
 lectura a la carpeta del juego), qué abre (una imagen de disco o carpeta, o los archivos del
-juego), qué hay que configurar en él antes de jugar, cómo lanza un juego y qué ajustes
-arreglan problemas conocidos. La interfaz lo muestra todo a partir de
-esa información: el apartado de su sistema en la barra lateral, su opción al añadir un juego
-y sus interruptores en «Solución de problemas». Para añadir uno: una variante en
+juego), qué hay que configurar en él antes de jugar, cómo lanza un juego, qué ajustes
+arreglan problemas conocidos y su página de ayuda (`help()`, con las rutas de su
+instalación). La interfaz lo muestra todo a partir de esa información: el apartado de su
+sistema en la barra lateral, su opción al añadir un juego, sus interruptores en «Solución de
+problemas» y su ayuda, enlazada desde la página de cada juego y desde el botón «?». La ayuda
+de los juegos de Windows (Wine/Proton) está en `src-tauri/src/help.rs`, junto a los tipos que
+comparten todas las páginas. Para añadir uno: una variante en
 `external::Kind`, un módulo que implemente `Emulator` y su entrada en `emulator::ALL`.
 
 ## Rutas

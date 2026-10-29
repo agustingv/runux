@@ -1,7 +1,8 @@
 //! DuckStation, the PlayStation emulator.
 
 use super::program::{Install, Program};
-use super::{check_option, option_args, rom, Emulator, Fix, Media};
+use crate::help::tilde;
+use super::{check_option, list, option_args, rom, section, steps, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -140,6 +141,28 @@ fn check_libcrypt(install: &Install, game: &ExternalGame, rom: &Path) -> Result<
     }
 }
 
+/// How to give `program`, installed as `install`, the BIOS of the `console`,
+/// kept in `dir`; `which` tells which one. PCSX2 shares it.
+pub(super) fn bios_help(install: Option<&Install>, program: &str, console: &str, which: &str, dir: Option<PathBuf>) -> HelpSection {
+    let dir = dir.map(|d| tilde(&d)).unwrap_or_else(|| "su carpeta bios".into());
+    let open = format!("Pulsa «Abrir {program}» en la página de un juego. Su asistente inicial te pide la carpeta de la BIOS: elige `{dir}`. Si ya lo pasaste, está en los ajustes de {program}, en BIOS.");
+    let put = if install.is_none_or(Install::is_flatpak) {
+        format!("Copia el archivo de la BIOS a `{dir}` (créala si no existe). {program} instalado desde Flathub no ve el resto de tu carpeta personal, así que tiene que estar ahí.")
+    } else {
+        format!("Copia el archivo de la BIOS a `{dir}`, o a cualquier otra carpeta.")
+    };
+    section(
+        "Antes de jugar: la BIOS",
+        vec![
+            text(format!(
+                "{program} necesita la BIOS de una {console}: el sistema de la consola, un archivo que se vuelca de una \
+                 consola tuya. {which}"
+            )),
+            steps([put, open]),
+        ],
+    )
+}
+
 /// Its own fixes, which PCSX2 shares.
 pub(super) fn fixes(program: &str, bios: &str) -> Vec<Fix> {
     vec![
@@ -191,6 +214,60 @@ impl Emulator for Duckstation {
 
     fn fixes(&self) -> Vec<Fix> {
         fixes(self.program(), "PlayStation")
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        let install = PROGRAM.find_or_flatpak();
+        let bios = install.as_ref().and_then(user_dir).map(|d| d.join("bios"));
+        vec![
+            bios_help(
+                install.as_ref(),
+                self.program(),
+                "PlayStation",
+                "Mejor una de la misma región que tus juegos: SCPH-5502 para los europeos, SCPH-1001 para los \
+                 americanos y SCPH-5500 para los japoneses. Si hay varias, DuckStation elige la que toca.",
+                bios,
+            ),
+            section(
+                "Qué imagen añadir",
+                vec![list([
+                    "Un `.cue` con sus `.bin`: añade el `.cue`, que describe las pistas del disco; los `.bin` tienen \
+                     que estar a su lado.",
+                    "Un `.chd`: el disco entero comprimido en un solo archivo. Es la mejor opción si vas a \
+                     convertir tus imágenes.",
+                    "Un `.bin`, `.iso`, `.img`, `.ecm`, `.mds` o `.ccd` suelto también vale, y un `.pbp` de la \
+                     PlayStation Store.",
+                    "Para un juego de varios discos, crea un `.m3u`: un archivo de texto con el nombre de la imagen \
+                     de cada disco, uno por línea. Añade el `.m3u` y cambia de disco desde DuckStation cuando el \
+                     juego lo pida.",
+                ])],
+            ),
+            section(
+                "Juegos con protección LibCrypt",
+                vec![
+                    text(
+                        "Muchos juegos europeos, como Resident Evil 3 o Ape Escape, tienen una protección anticopia \
+                         que va en los datos de subcanal del disco, que una imagen `.bin` no guarda. DuckStation no \
+                         los arranca sin un archivo `.sbi` con esos datos; Runux te avisa al darle a Jugar.",
+                    ),
+                    steps([
+                        "Consigue el `.sbi` del juego. Se nombra por el código del disco, como `SLES-02529.sbi`: \
+                         está en la carátula, en el propio disco y en el nombre de muchas imágenes.",
+                        "Cópialo junto a la imagen, con su mismo nombre y la extensión `.sbi`: para `Juego.cue`, \
+                         `Juego.sbi`; para `Juego.bin.ecm`, `Juego.bin.sbi`.",
+                    ]),
+                ],
+            ),
+            section(
+                "Si algo falla",
+                vec![list([
+                    "Si se cierra nada más empezar, revisa la BIOS. Para ver el mensaje de error, abre el juego \
+                     desde DuckStation (con «Abrir DuckStation»), no desde Runux.",
+                    "Los mandos, los gráficos y el resto de ajustes se configuran en DuckStation, y valen para todos \
+                     sus juegos.",
+                ])],
+            ),
+        ]
     }
 
     fn check_setting(&self, key: &str, value: &str) -> Result<(), String> {

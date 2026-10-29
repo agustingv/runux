@@ -1,8 +1,8 @@
 //! Emulators: the programs that run games of other systems (Dreamcast,
 //! PlayStation…) or engines (ScummVM) natively, without Wine. Each says how
 //! it's installed, what it opens, how it starts a game and which of its
-//! settings fix known problems, so the UI shows each one's own options
-//! without knowing it.
+//! settings fix known problems, with its help page, so the UI shows each
+//! one's own options without knowing it.
 //!
 //! Adding one takes a `Kind` variant, a module implementing `Emulator`, and
 //! its entry in `ALL`.
@@ -16,6 +16,7 @@ mod rpcs3;
 mod scummvm;
 
 use crate::external::{ExternalGame, Kind};
+use crate::help::{list, section, steps, text, HelpSection};
 use program::Install;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -111,6 +112,8 @@ pub struct EmulatorInfo {
     pub setup: Option<String>,
     pub media: Media,
     pub fixes: Vec<Fix>,
+    /// Its help page: setting it up, what to add, known problems.
+    pub help: Vec<HelpSection>,
 }
 
 pub trait Emulator: Sync {
@@ -130,6 +133,10 @@ pub trait Emulator: Sync {
     }
 
     fn fixes(&self) -> Vec<Fix> {
+        Vec::new()
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
         Vec::new()
     }
 
@@ -199,6 +206,7 @@ pub trait Emulator: Sync {
             setup: self.setup(),
             media: self.media(),
             fixes: self.fixes(),
+            help: self.help(),
         }
     }
 }
@@ -270,6 +278,15 @@ mod tests {
             for fix in emu.fixes() {
                 assert!(emu.check_setting(&fix.key, &fix.value).is_ok(), "{}: {}", emu.program(), fix.key);
             }
+        }
+    }
+
+    #[test]
+    fn every_emulator_has_help() {
+        for emu in ALL {
+            let help = emu.help();
+            assert!(!help.is_empty(), "{}", emu.program());
+            crate::help::check(&help);
         }
     }
 

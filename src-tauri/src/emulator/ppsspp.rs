@@ -1,7 +1,7 @@
 //! PPSSPP, the PSP emulator.
 
 use super::program::{Install, Program};
-use super::{option_args, rom, Emulator, Fix, Media};
+use super::{list, option_args, rom, section, text, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -45,6 +45,30 @@ impl Emulator for Ppsspp {
 
     fn media(&self) -> Media {
         Media::image(self.program(), &["iso", "cso", "chd", "pbp"])
+    }
+
+    fn help(&self) -> Vec<HelpSection> {
+        vec![
+            section(
+                "Antes de jugar",
+                vec![text("PPSSPP no necesita BIOS ni firmware: basta con añadir el juego.")],
+            ),
+            section(
+                "Qué imagen añadir",
+                vec![list([
+                    "Una `.iso` del UMD, o un `.cso` o `.chd`, que son la imagen comprimida.",
+                    "Un `.pbp`, como vienen los juegos de la PlayStation Store.",
+                ])],
+            ),
+            section(
+                "Si algo falla",
+                vec![list([
+                    "Esc abre el menú de PPSSPP, para guardar la partida o salir.",
+                    "Los mandos, los gráficos y el resto de ajustes se configuran en PPSSPP, y valen para todos sus \
+                     juegos.",
+                ])],
+            ),
+        ]
     }
 
     fn fixes(&self) -> Vec<Fix> {
