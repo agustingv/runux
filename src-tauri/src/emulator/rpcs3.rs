@@ -19,6 +19,31 @@ fn command(install: &Install, dir: &Path, rom: &Path, settings: &BTreeMap<String
     cmd
 }
 
+/// Where `vfs.yml` puts `/dev_flash/`, the PS3's system storage, which
+/// holds the firmware: in the settings folder `config` unless moved.
+fn dev_flash(config: &Path, vfs: Option<&str>) -> PathBuf {
+    vfs.and_then(|vfs| vfs.lines().find_map(|l| l.trim().strip_prefix("/dev_flash/:")))
+        .map(|dir| dir.trim().trim_matches(|c| c == '"' || c == '\'').to_string())
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| PathBuf::from(dir.replace("$(EmulatorDir)", &format!("{}/", config.display()))))
+        .unwrap_or_else(|| config.join("dev_flash"))
+}
+
+/// Without the firmware, RPCS3 can't load the system fonts and, with
+/// `--no-gui`, hangs without a window: say so before launching it.
+fn check_firmware(install: &Install) -> Result<(), String> {
+    let Some(config) = install.config_dir("rpcs3") else {
+        return Ok(());
+    };
+    let vfs = std::fs::read_to_string(config.join("vfs.yml")).ok();
+    if dev_flash(&config, vfs.as_deref()).join("vsh/etc/version.txt").is_file() {
+        return Ok(());
+    }
+    Err("Falta el firmware de la PlayStation 3, sin el que RPCS3 se queda bloqueado. Descarga PS3UPDAT.PUP de la \
+         web de PlayStation, pulsa «Abrir RPCS3» e instálalo desde File → Install Firmware."
+        .into())
+}
+
 /// The folder holding a whole game, from its `EBOOT.BIN`: a disc game's is
 /// in `<game>/PS3_GAME/USRDIR/`, a PSN game's in `<game>/USRDIR/`.
 fn game_root(rom: &Path) -> PathBuf {
@@ -103,7 +128,9 @@ impl Emulator for Rpcs3 {
     }
 
     fn command(&self, game: &ExternalGame, settings: &BTreeMap<String, String>) -> Result<Command, String> {
-        Ok(command(&self.require()?, &game.path, rom(game)?, settings))
+        let install = self.require()?;
+        check_firmware(&install)?;
+        Ok(command(&install, &game.path, rom(game)?, settings))
     }
 
     fn game_dir(&self, rom: &Path) -> PathBuf {
@@ -169,6 +196,15 @@ mod tests {
         assert_eq!(game_root(Path::new("/g/DeS/PS3_GAME/USRDIR/EBOOT.BIN")), Path::new("/g/DeS"));
         assert_eq!(game_root(Path::new("/g/Journey/USRDIR/EBOOT.BIN")), Path::new("/g/Journey"));
         assert_eq!(game_root(Path::new("/g/Uncharted.iso")), Path::new("/g"));
+    }
+
+    #[test]
+    fn finds_the_firmware_where_vfs_puts_it() {
+        let config = Path::new("/c/rpcs3");
+        assert_eq!(dev_flash(config, None), Path::new("/c/rpcs3/dev_flash"));
+        let vfs = "$(EmulatorDir): \"\"\n/dev_flash/: $(EmulatorDir)dev_flash/\n/dev_hdd0/: /big/hdd0/\n";
+        assert_eq!(dev_flash(config, Some(vfs)), Path::new("/c/rpcs3/dev_flash/"));
+        assert_eq!(dev_flash(config, Some("/dev_flash/: /ps3/flash/\n")), Path::new("/ps3/flash/"));
     }
 
     #[test]
