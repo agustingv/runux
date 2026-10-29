@@ -317,6 +317,19 @@ fn remove_dir(dir: &Path) {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The task a game runs as, which names its log folder.
+fn task(id: &str) -> String {
+    format!("ext:{id}")
+}
+
+/// The box art that can be downloaded for `game`, if its system has them.
+fn cover(game: &ExternalGame) -> Option<emulator::Cover> {
+    emulator::get(game.kind)?.cover(game.rom.as_deref()?)
+}
+
+/// Removes the game and what Runux made for it: the files it imported, its
+/// downloaded cover (unless another game shows the same one) and its
+/// Proton logs. The player's own image or folder stays.
 pub fn remove(id: &str) -> Result<(), String> {
     let _lock = lock();
     let mut games = load();
@@ -329,6 +342,13 @@ pub fn remove(id: &str) -> Result<(), String> {
     if game.imported {
         remove_dir(&game.path);
     }
+    if let Some(own) = cover(&game) {
+        let shared = games.iter().filter(|g| g.kind == game.kind).any(|g| cover(g).is_some_and(|c| c.file == own.file));
+        if !shared {
+            crate::covers::remove(&own)?;
+        }
+    }
+    let _ = std::fs::remove_dir_all(wine::game_log_dir(&task(id)));
     Ok(())
 }
 
@@ -374,7 +394,7 @@ pub fn set_settings(id: &str, settings: BTreeMap<String, String>) -> Result<Exte
 }
 
 pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), String> {
-    let task = format!("ext:{}", game.id);
+    let task = task(&game.id);
     wine::log(app, &task, format!("Lanzando {}", game.name));
     match emulator::get(game.kind) {
         Some(emu) => wine::spawn_logged(app, &task, emu.command(game, &emu.settings(game))?),

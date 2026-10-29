@@ -1,12 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { CoverInfo } from "./bindings/CoverInfo";
 import type { ExternalKind } from "./bindings/ExternalKind";
 import type { Task } from "./bindings/Task";
 
 // Types shared with the Rust side, generated from it by `cargo test` (ts-rs).
 export type { AddGameRequest } from "./bindings/AddGameRequest";
 export type { Config } from "./bindings/Config";
+export type { CoverInfo } from "./bindings/CoverInfo";
 export type { DiscInfo } from "./bindings/DiscInfo";
 export type { DiscSession } from "./bindings/DiscSession";
 export type { EaGame } from "./bindings/EaGame";
@@ -86,6 +88,9 @@ export const api = {
   /** Data URL of the icon in a game's executable, by its key in the sidebar. */
   gameIcon: (key: string) => invoke<string | null>("game_icon", { key }),
   gameBackground: (key: string) => invoke<string | null>("game_background", { key }),
+  coverInfo: (id: string) => invoke<CoverInfo | null>("cover_info", { id }),
+  downloadCover: (id: string) => invoke<void>("download_cover", { id }),
+  removeCover: (id: string) => invoke<void>("remove_cover", { id }),
   /** Opens the folder of a game's Proton log, by its task (`ea:<id>`, `ext:<id>`). */
   openGameLogs: (key: string) => invoke<void>("open_game_logs", { key }),
   listProtons: () => invoke<ProtonBuild[]>("list_protons"),

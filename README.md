@@ -37,8 +37,9 @@ Las imágenes de cada juego salen de su disco cuando las trae (`art()`: `ICON0.P
 `PIC1.PNG` de PS3 y PSP, leídos de la `.iso` con `iso9660.rs`). Los de PS1 y PS2 no traen
 ninguna, así que `cover()` dice dónde descargar su carátula: de las colecciones de xlenore en
 GitHub, por el código del disco, que `emulator/playstation.rs` saca del `SYSTEM.CNF`, del
-nombre del archivo o del título en la lista de juegos del emulador. Se descargan una vez a
-`~/.cache/runux/covers/`.
+nombre del archivo o del título en la lista de juegos del emulador. Runux no se conecta por su
+cuenta: cada carátula se descarga solo cuando el usuario pulsa «Descargar carátula» en la
+página del juego, y se guarda en `~/.cache/runux/covers/`.
 
 ## Rutas
 

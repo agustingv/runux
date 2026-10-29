@@ -1,13 +1,12 @@
-//! Box art for games whose discs carry no pictures (PS1, PS2), downloaded
-//! once and kept in the cache.
+//! Box art for games whose discs carry no pictures (PS1, PS2). Runux never
+//! fetches it on its own: the player downloads each one from the game's page,
+//! and from then on it's read from the cache.
 
 use crate::config;
 use crate::emulator::Cover;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-/// How long a cover the collection lacks isn't asked for again.
-const RETRY_MISSING: Duration = Duration::from_secs(7 * 24 * 3600);
 /// Biggest cover taken: they're a few hundred KB.
 const MAX_SIZE: usize = 8 << 20;
 
@@ -20,31 +19,46 @@ fn is_jpeg(data: &[u8]) -> bool {
     data.starts_with(&[0xff, 0xd8, 0xff])
 }
 
-/// The cover, from the cache or downloaded into it. `None` when the
-/// collection has none (remembered for a week) or it can't be reached.
-pub async fn get(cover: &Cover) -> Option<Vec<u8>> {
-    let path = path(cover);
-    if let Ok(data) = tokio::fs::read(&path).await {
-        return Some(data);
-    }
-    let missing = path.with_extension("missing");
-    let modified = std::fs::metadata(&missing).and_then(|m| m.modified()).ok();
-    if modified.is_some_and(|m| SystemTime::now().duration_since(m).unwrap_or_default() < RETRY_MISSING) {
-        return None;
-    }
-    let response = crate::download::client().ok()?.get(&cover.url).timeout(Duration::from_secs(30)).send().await.ok()?;
-    std::fs::create_dir_all(path.parent()?).ok()?;
+/// The cover, if it was downloaded.
+pub fn cached(cover: &Cover) -> Option<Vec<u8>> {
+    std::fs::read(path(cover)).ok()
+}
+
+pub fn is_cached(cover: &Cover) -> bool {
+    path(cover).is_file()
+}
+
+/// Downloads the cover into the cache.
+pub async fn download(cover: &Cover) -> Result<(), String> {
+    let unreachable = |e: reqwest::Error| format!("No se pudo descargar la carátula: {e}");
+    let response = crate::download::client()?
+        .get(&cover.url)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(unreachable)?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        let _ = std::fs::write(&missing, "");
-        return None;
+        return Err(format!("La colección de carátulas no tiene la de {}", cover.serial));
     }
-    let data = response.error_for_status().ok()?.bytes().await.ok()?;
+    let data = response.error_for_status().map_err(unreachable)?.bytes().await.map_err(unreachable)?;
     if !is_jpeg(&data) || data.len() > MAX_SIZE {
-        return None;
+        return Err("Lo descargado no es una carátula".into());
     }
+    let path = path(cover);
+    let dir = path.parent().ok_or("Ruta de carátula no válida")?;
     let tmp = path.with_extension("part");
-    std::fs::write(&tmp, &data).and_then(|()| std::fs::rename(&tmp, &path)).ok()?;
-    Some(data.to_vec())
+    std::fs::create_dir_all(dir)
+        .and_then(|()| std::fs::write(&tmp, &data))
+        .and_then(|()| std::fs::rename(&tmp, &path))
+        .map_err(|e| format!("No se pudo guardar la carátula: {e}"))
+}
+
+/// Deletes the downloaded cover.
+pub fn remove(cover: &Cover) -> Result<(), String> {
+    match std::fs::remove_file(path(cover)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("No se pudo borrar la carátula: {e}")),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]
