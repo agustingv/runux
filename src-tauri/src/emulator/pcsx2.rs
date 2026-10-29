@@ -68,14 +68,14 @@ impl Emulator for Pcsx2 {
                     "Un `.bin` de los pocos juegos que venían en CD.".into(),
                 ])],
             ),
+            duckstation::pad_help(self.program()),
             section(
                 "Si algo falla",
                 vec![list([
                     "Si va lento o se ve mal, prueba en los ajustes de gráficos de PCSX2 otro renderizador (Vulkan u \
                      OpenGL) o menos resolución.".to_string(),
                     format!("Las tarjetas de memoria las crea PCSX2 solo; las partidas guardadas están en `{memcards}`."),
-                    "Los mandos, los gráficos y el resto de ajustes se configuran en PCSX2, y valen para todos sus \
-                     juegos.".into(),
+                    "Los gráficos y el resto de ajustes se configuran en PCSX2, y valen para todos sus juegos.".into(),
                 ])],
             ),
         ]
