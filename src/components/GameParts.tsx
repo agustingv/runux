@@ -1,22 +1,78 @@
-import type { CSSProperties, ReactNode } from "react";
-import { PlayIcon } from "../icons";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { errorMessage } from "../api";
+import { PencilIcon, PlayIcon } from "../icons";
 import { GameIcon, useGameBackground } from "./GameIcon";
 
 /** The header of a game's page: its icon and name over its disc's background, or its accent color. */
-export function Banner({ gameKey, name, accent, ready }: {
+export function Banner({ gameKey, name, accent, ready, onRename }: {
   gameKey: string;
   name: string;
   accent: string;
   /** False while there is no executable to read the icon from. */
   ready: boolean;
+  /** Saves a new name, for games whose name the player can change. */
+  onRename?: (name: string) => Promise<void>;
 }) {
   const background = useGameBackground(gameKey);
   return (
     <header className={`banner ${background ? "has-bg" : ""}`} style={{ "--accent": accent } as CSSProperties}>
       {background && <img className="banner-bg" src={background} alt="" />}
       <GameIcon gameKey={gameKey} name={name} ready={ready} className="banner-mark" />
-      <h1>{name}</h1>
+      {onRename ? <EditableName key={gameKey} name={name} onRename={onRename} /> : <h1>{name}</h1>}
     </header>
+  );
+}
+
+/** The game's name, which its pencil turns into a field: Enter or leaving it saves, Esc cancels. */
+function EditableName({ name, onRename }: { name: string; onRename: (name: string) => Promise<void> }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const next = draft?.trim();
+    if (!next || next === name) {
+      setDraft(null);
+      setError(null);
+      return;
+    }
+    try {
+      await onRename(next);
+      setDraft(null);
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  if (draft === null) {
+    return (
+      <h1 className="banner-title">
+        {name}
+        <button className="icon-btn" title="Cambiar el nombre" onClick={() => setDraft(name)}>
+          <PencilIcon />
+        </button>
+      </h1>
+    );
+  }
+  return (
+    <div className="banner-title">
+      <input
+        className="banner-name"
+        aria-label="Nombre del juego"
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setDraft(null);
+            setError(null);
+          }
+        }}
+      />
+      {error && <div className="note">{error}</div>}
+    </div>
   );
 }
 

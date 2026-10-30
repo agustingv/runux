@@ -14,13 +14,26 @@ function cached(cache: Map<string, Promise<string | null>>, gameKey: string, get
   return picture;
 }
 
-/** Shown icons, re-asked for when a game's icon changes (a cover downloaded or removed). */
+/** Shown pictures, re-asked for when a game's change (a cover downloaded or removed, its image moved). */
 const shown = new Map<string, Set<() => void>>();
 
-/** Forgets the game's icon, so that it's asked for again everywhere it's shown. */
+/** Forgets the game's pictures, so that they're asked for again everywhere they're shown. */
 export function refreshIcon(gameKey: string) {
   icons.delete(gameKey);
+  backgrounds.delete(gameKey);
   shown.get(gameKey)?.forEach((reload) => reload());
+}
+
+/** A number that changes each time the game's pictures are refreshed. */
+function useVersion(gameKey: string) {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const reload = () => setVersion((v) => v + 1);
+    const set = shown.get(gameKey) ?? new Set();
+    shown.set(gameKey, set.add(reload));
+    return () => { set.delete(reload); };
+  }, [gameKey]);
+  return version;
 }
 
 /**
@@ -29,6 +42,7 @@ export function refreshIcon(gameKey: string) {
  */
 export function useGameBackground(gameKey: string): string | null {
   const [background, setBackground] = useState<string | null>(null);
+  const version = useVersion(gameKey);
   useEffect(() => {
     setBackground(null);
     // Only games added by hand can be emulator games.
@@ -36,7 +50,7 @@ export function useGameBackground(gameKey: string): string | null {
     let current = true;
     cached(backgrounds, gameKey, api.gameBackground).then((b) => current && setBackground(b));
     return () => { current = false; };
-  }, [gameKey]);
+  }, [gameKey, version]);
   return background;
 }
 
@@ -57,14 +71,7 @@ export function GameIcon({ gameKey, name, className, ready, style }: Props) {
   const [small, setSmall] = useState(false);
   // PS3 and PSP icons are logos, about twice as wide as tall.
   const [wide, setWide] = useState(false);
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    const reload = () => setVersion((v) => v + 1);
-    const set = shown.get(gameKey) ?? new Set();
-    shown.set(gameKey, set.add(reload));
-    return () => { set.delete(reload); };
-  }, [gameKey]);
+  const version = useVersion(gameKey);
 
   useEffect(() => {
     setIcon(null);

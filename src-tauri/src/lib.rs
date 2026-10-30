@@ -20,7 +20,7 @@ mod wine;
 use config::{Config, Runner};
 use battlenet::Game;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, RunEvent, State};
 use ts_rs::TS;
@@ -401,6 +401,23 @@ fn launch_external_game(app: AppHandle, state: State<'_, AppState>, id: String) 
 }
 
 #[tauri::command]
+fn rename_external_game(id: String, name: String) -> Result<external::ExternalGame, String> {
+    external::rename(&id, &name)
+}
+
+/// Points the external game `id` at `path`, where the player moved it.
+#[tauri::command]
+async fn relocate_external_game(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    path: PathBuf,
+) -> Result<external::ExternalGame, String> {
+    let cfg = state.config();
+    external::relocate(&app, &cfg, &id, path).await
+}
+
+#[tauri::command]
 fn set_external_env(
     id: String,
     env: std::collections::BTreeMap<String, String>,
@@ -561,6 +578,8 @@ pub fn run() {
             remove_external_game,
             launch_external_game,
             open_external_folder,
+            rename_external_game,
+            relocate_external_game,
             set_external_env,
             set_external_settings,
             open_emulator,

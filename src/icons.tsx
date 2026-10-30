@@ -27,6 +27,9 @@ export const FolderIcon = ({ size = 18 }: P) =>
 export const HomeIcon = ({ size = 18 }: P) =>
   svg(size, <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></>);
 
+export const PencilIcon = ({ size = 18 }: P) =>
+  svg(size, <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />);
+
 export const CheckIcon = ({ size = 18 }: P) =>
   svg(size, <polyline points="20 6 9 17 4 12" />);
 

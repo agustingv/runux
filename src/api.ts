@@ -102,6 +102,10 @@ export const api = {
   removeExternalGame: (id: string) => invoke<void>("remove_external_game", { id }),
   launchExternalGame: (id: string) => invoke<void>("launch_external_game", { id }),
   openExternalFolder: (id: string) => invoke<void>("open_external_folder", { id }),
+  renameExternalGame: (id: string, name: string) => invoke<ExternalGameEntry>("rename_external_game", { id, name }),
+  /** Points the game at where the player moved its image, executable or folder. */
+  relocateExternalGame: (id: string, path: string) =>
+    invoke<ExternalGameEntry>("relocate_external_game", { id, path }),
   setExternalEnv: (id: string, env: Record<string, string>) =>
     invoke<ExternalGameEntry>("set_external_env", { id, env }),
   openEmulator: (kind: ExternalKind) => invoke<void>("open_emulator", { kind }),

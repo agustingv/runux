@@ -69,6 +69,9 @@ pub struct ExternalStatus {
     #[serde(flatten)]
     pub game: ExternalGame,
     pub running: bool,
+    /// Whether what it opens (its image, executable or folder) is gone, as
+    /// when the player moved it.
+    pub missing: bool,
 }
 
 #[derive(Deserialize, TS)]
@@ -129,7 +132,8 @@ pub fn list(cfg: &Config, cmdlines: &[String]) -> Vec<ExternalStatus> {
             if let Some(emu) = emulator::get(game.kind) {
                 game.settings = Some(emu.settings(&game));
             }
-            ExternalStatus { game, running }
+            let missing = missing(&game);
+            ExternalStatus { game, running, missing }
         })
         .collect()
 }
@@ -142,6 +146,10 @@ fn running_marker(cfg: &Config, game: &ExternalGame) -> String {
         Some(emu) => emu.running_marker(game),
         None => format!("{}/", wine::to_win_path(cfg, &game.path)),
     }
+}
+
+fn missing(game: &ExternalGame) -> bool {
+    !game.rom.as_deref().or(game.exe.as_deref()).unwrap_or(&game.path).exists()
 }
 
 fn has_extension(p: &Path, extensions: &[String]) -> bool {
@@ -215,6 +223,19 @@ fn is_iso(p: &Path) -> bool {
     p.extension().is_some_and(|e| e.eq_ignore_ascii_case("iso"))
 }
 
+/// Checks that `rom` is something `emu`, of `Media::File`, opens.
+fn check_rom(emu: &dyn emulator::Emulator, rom: &Path) -> Result<(), String> {
+    let Media::File { extensions, folder, .. } = emu.media() else {
+        return Ok(());
+    };
+    if has_extension(rom, &extensions) || folder && rom.is_dir() {
+        Ok(())
+    } else {
+        let what = if folder { "carpetas de juego o imágenes" } else { "imágenes" };
+        Err(format!("{} abre {what} {}", emu.program(), extensions.join(", ")))
+    }
+}
+
 pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, String> {
     let isos: Vec<PathBuf> = {
         let mut v: Vec<PathBuf> = req.sources.iter().filter(|p| is_iso(p)).cloned().collect();
@@ -236,12 +257,9 @@ pub async fn add(app: &AppHandle, req: AddRequest) -> Result<ExternalGame, Strin
             let dir = exe.parent().ok_or("Ruta de ejecutable no válida")?;
             (dir.to_path_buf(), false)
         }
-        Some((emu, Media::File { extensions, folder, .. })) => {
+        Some((emu, Media::File { .. })) => {
             let rom = req.rom.as_ref().ok_or("Elige el juego")?;
-            if !(has_extension(rom, &extensions) || folder && rom.is_dir()) {
-                let what = if folder { "carpetas de juego o imágenes" } else { "imágenes" };
-                return Err(format!("{} abre {what} {}", emu.program(), extensions.join(", ")));
-            }
+            check_rom(emu, rom)?;
             (emu.game_dir(rom), false)
         }
         Some((_, Media::GameFiles)) if isos.is_empty() => match req.sources.as_slice() {
@@ -342,14 +360,17 @@ pub fn remove(id: &str) -> Result<(), String> {
     if game.imported {
         remove_dir(&game.path);
     }
-    if let Some(own) = cover(&game) {
-        let shared = games.iter().filter(|g| g.kind == game.kind).any(|g| cover(g).is_some_and(|c| c.file == own.file));
-        if !shared {
-            crate::covers::remove(&own)?;
-        }
-    }
+    drop_cover(cover(&game), &games)?;
     let _ = std::fs::remove_dir_all(wine::game_log_dir(&task(id)));
     Ok(())
+}
+
+/// Deletes the downloaded cover `old`, unless one of `games` shows it.
+fn drop_cover(old: Option<emulator::Cover>, games: &[ExternalGame]) -> Result<(), String> {
+    match old {
+        Some(old) if !games.iter().any(|g| cover(g).is_some_and(|c| c.file == old.file)) => crate::covers::remove(&old),
+        _ => Ok(()),
+    }
 }
 
 fn valid_env_name(name: &str) -> bool {
@@ -380,6 +401,61 @@ fn update(id: &str, change: impl FnOnce(&mut ExternalGame)) -> Result<ExternalGa
     Ok(game)
 }
 
+pub fn rename(id: &str, name: &str) -> Result<ExternalGame, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Escribe el nombre del juego".into());
+    }
+    update(id, |game| game.name = name.into())
+}
+
+/// Points the game at `to`, where its image, executable or folder is now.
+/// Its cover goes if `to` is another game and no other game shows it.
+pub async fn relocate(app: &AppHandle, cfg: &Config, id: &str, to: PathBuf) -> Result<ExternalGame, String> {
+    let game = find(id)?;
+    if wine::running_cmdlines().iter().any(|c| c.contains(&running_marker(cfg, &game))) {
+        return Err("Cierra el juego antes de cambiar dónde está".into());
+    }
+    if !to.exists() {
+        return Err(format!("No existe {}", to.display()));
+    }
+    let (path, exe, rom) = match emulator::get(game.kind).map(|e| (e, e.media())) {
+        None if has_extension(&to, &["exe".into()]) => {
+            (to.parent().ok_or("Ruta de ejecutable no válida")?.to_path_buf(), Some(to), None)
+        }
+        None => return Err("Elige el ejecutable del juego (.exe)".into()),
+        Some((emu, Media::File { .. })) => {
+            check_rom(emu, &to)?;
+            (emu.game_dir(&to), None, Some(to))
+        }
+        Some((_, Media::GameFiles)) if game.imported => {
+            return Err("Los archivos de este juego los importó Runux, y siguen en su carpeta".into());
+        }
+        Some((_, Media::GameFiles)) if !to.is_dir() => return Err("Elige la carpeta del juego".into()),
+        Some((_, Media::GameFiles)) => {
+            if game.kind == Kind::Scummvm {
+                let (target, desc) = emulator::detect_scummvm(app, &to).await?;
+                if game.scummvm_id.as_deref() != Some(target.as_str()) {
+                    return Err(format!("Esa carpeta tiene otro juego: {desc}"));
+                }
+            }
+            (to, None, None)
+        }
+    };
+    // Loaded again: detecting may have taken a while. No `await` from here on.
+    let _lock = lock();
+    let mut games = load();
+    let slot = games.iter_mut().find(|g| g.id == id).ok_or_else(|| format!("Juego desconocido: {id}"))?;
+    let old = cover(slot);
+    slot.path = path;
+    slot.exe = exe.or(slot.exe.take());
+    slot.rom = rom.or(slot.rom.take());
+    let game = slot.clone();
+    save(&games)?;
+    drop_cover(old, &games)?;
+    Ok(game)
+}
+
 pub fn set_env(id: &str, env: BTreeMap<String, String>) -> Result<ExternalGame, String> {
     check_env(&env)?;
     update(id, |game| game.env = env)
@@ -394,6 +470,9 @@ pub fn set_settings(id: &str, settings: BTreeMap<String, String>) -> Result<Exte
 }
 
 pub fn launch(app: &AppHandle, cfg: &Config, game: &ExternalGame) -> Result<(), String> {
+    if missing(game) {
+        return Err(format!("No se encuentra {}: búscalo desde la página del juego", game.name));
+    }
     let task = task(&game.id);
     wine::log(app, &task, format!("Lanzando {}", game.name));
     match emulator::get(game.kind) {
@@ -437,6 +516,34 @@ mod tests {
         let sonic = running_marker(&cfg, &ExternalGame { rom: Some("/g/Sonic/disc.gdi".into()), ..game(Kind::Dreamcast, "/g/Sonic") });
         assert!("flatpak run org.flycast.flycast /g/sonic/disc.gdi ".contains(&sonic));
         assert!(!"flycast /g/sonic/disc.gdi.bak ".contains(&sonic));
+    }
+
+    #[test]
+    fn notices_moved_games() {
+        let game = ExternalGame {
+            id: "x".into(),
+            name: "X".into(),
+            kind: Kind::Dreamcast,
+            path: std::env::temp_dir(),
+            exe: None,
+            rom: None,
+            scummvm_id: None,
+            accent: String::new(),
+            imported: false,
+            env: BTreeMap::new(),
+            settings: None,
+        };
+        assert!(!missing(&game));
+        assert!(missing(&ExternalGame { rom: Some(std::env::temp_dir().join("runux-gone.gdi")), ..game.clone() }));
+        assert!(missing(&ExternalGame { path: "/runux-gone".into(), ..game }));
+    }
+
+    #[test]
+    fn checks_what_emulators_open() {
+        let flycast = emulator::get(Kind::Dreamcast).unwrap();
+        assert!(check_rom(flycast, Path::new("/g/Crazy Taxi.CDI")).is_ok());
+        assert!(check_rom(flycast, Path::new("/g/game.iso")).is_err());
+        assert!(check_rom(emulator::get(Kind::Scummvm).unwrap(), Path::new("/g/BR")).is_ok());
     }
 
     #[test]

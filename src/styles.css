@@ -194,6 +194,16 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
   background: linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
 }
 .banner.has-bg .banner-mark, .banner.has-bg h1 { z-index: 1; }
+/* A name the player can change, from the pencil beside it. */
+.banner-title { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.banner-title .icon-btn { opacity: .6; }
+.banner-title:hover .icon-btn, .banner-title .icon-btn:focus-visible { opacity: 1; }
+.banner-name {
+  flex: 1; max-width: 720px; padding: 0 8px; font: inherit; font-size: 40px; font-weight: 700;
+  color: var(--text); background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.banner-title .note { flex-basis: 100%; }
 .play-bar { display: flex; align-items: center; gap: 12px; padding: 8px 40px 24px; }
 .details { padding: 0 40px 40px; }
 .details dl {
@@ -202,6 +212,7 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
 }
 .details dt { color: var(--muted); }
 .details dd { margin: 0; }
+.details > .note { margin-bottom: 12px; }
 .uninstall-note { margin: 0 40px 24px; }
 .troubleshooting { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
 .fixes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 1px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }

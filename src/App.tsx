@@ -196,6 +196,14 @@ export default function App() {
                 await api.setExternalSettings(ext.id, settings);
                 refresh();
               }}
+              onRename={async (name) => {
+                await api.renameExternalGame(ext.id, name);
+                refresh();
+              }}
+              onRelocate={async (path) => {
+                await api.relocateExternalGame(ext.id, path);
+                refresh();
+              }}
             />
           ) : !ready ? (
             <Setup
