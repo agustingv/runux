@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Runux instala Battle.net y la EA app en Linux con Proton o Wine, sin necesidad de Steam.">
+<meta name="description" content="Runux instala Battle.net y la EA app en Linux con Proton o Wine, sin necesidad de Steam, y reúne tus juegos de Dreamcast, PlayStation y ScummVM en la misma biblioteca.">
 <title>Descargar Runux</title>
 <link rel="icon" href="runux.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -155,8 +155,8 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
     </div>
 
     <div class="hero">
-      <h1>Tus juegos de Windows, en Linux.</h1>
-      <p>Runux instala Battle.net y la EA app en prefijos de Proton o Wine, encuentra sus juegos y los abre con un clic. No necesitas Steam.</p>
+      <h1>Tus juegos de Windows y de consola, en Linux.</h1>
+      <p>Runux instala Battle.net y la EA app en prefijos de Proton o Wine, encuentra sus juegos y los abre con un clic. Tus juegos de Dreamcast, PlayStation y ScummVM, en la misma biblioteca. No necesitas Steam.</p>
     </div>
 
     <div class="packages">
@@ -231,12 +231,28 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
           <p>Interruptores para los fallos típicos de juegos antiguos (ratón que no responde, demasiados núcleos) y variables de entorno por juego.</p>
         </li>
         <li>
-          <h3>Juegos sueltos</h3>
-          <p>Añade cualquier ejecutable de Windows o juegos de ScummVM a la misma biblioteca.</p>
+          <h3>Juegos de consola</h3>
+          <p>Dreamcast con Flycast, PlayStation con DuckStation, PlayStation 2 con PCSX2, PlayStation 3 con RPCS3 y PSP con PPSSPP, además de ScummVM. Elige la imagen del disco y se abre desde donde está, sin copiarla.</p>
+        </li>
+        <li>
+          <h3>Carátulas e imágenes</h3>
+          <p>Los juegos de PS3 y PSP muestran el icono y el fondo de su disco. Los de PS1, PS2 y Dreamcast pueden descargar su carátula con un botón; Runux no se conecta por su cuenta.</p>
+        </li>
+        <li>
+          <h3>Ayuda para cada sistema</h3>
+          <p>Qué BIOS o firmware necesita cada emulador, qué imagen añadir, cómo asignar el mando y ajustes que arreglan problemas conocidos, como el juego que va demasiado rápido.</p>
+        </li>
+        <li>
+          <h3>Tu biblioteca, a tu manera</h3>
+          <p>Añade cualquier ejecutable de Windows, cambia el nombre de un juego o dónde está su imagen. Si mueves un archivo, Runux te avisa y te deja buscarlo.</p>
         </li>
         <li>
           <h3>Desinstalar</h3>
           <p>Quita juegos de Battle.net y de EA con sus desinstaladores oficiales, desde la ficha del juego.</p>
+        </li>
+        <li>
+          <h3>Se actualiza con el sistema</h3>
+          <p>El paquete añade el repositorio de Runux, así que las nuevas versiones llegan con <code>apt</code> o <code>dnf</code>, como el resto de tus programas.</p>
         </li>
       </ul>
     </section>
@@ -250,6 +266,8 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
         <dd>Una tarjeta con Vulkan y sus controladores al día, también los de 32 bits: Battle.net y la EA app son programas de 32 bits. Runux te dice cómo instalarlos si faltan.</dd>
         <dt>Dependencias</dt>
         <dd><code>webkit2gtk-4.1</code>, <code>udisks2</code> y <code>python3</code>. El gestor de paquetes las instala solo.</dd>
+        <dt>Emuladores</dt>
+        <dd>Para los juegos de consola, el emulador de cada sistema, de tu distribución o de Flathub. Runux te dice el comando para instalarlo.</dd>
         <dt>Espacio</dt>
         <dd>Unos 600 MB para GE-Proton, más lo que ocupen Battle.net, la EA app y tus juegos.</dd>
       </dl>
@@ -262,6 +280,7 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
         <li>Si no tienes Steam, ve a Ajustes y pulsa <b>Descargar GE-Proton</b>.</li>
         <li>Crea el prefijo e instala Battle.net o la EA app desde la pantalla de inicio.</li>
         <li>Inicia sesión en el cliente e instala tus juegos. Aparecerán en Runux para lanzarlos.</li>
+        <li>Para un juego de consola o un ejecutable suelto, pulsa <b>Añadir juego</b>, elige su sistema y la imagen del disco o el ejecutable.</li>
       </ol>
     </section>
   </div>
@@ -270,7 +289,7 @@ footer .wrap { padding-block: 1.5rem; display: flex; flex-wrap: wrap; justify-co
 <footer>
   <div class="wrap">
     <span>Runux @VERSION@ · Agustín García · <a href="https://github.com/agustingv/runux">Código fuente</a></span>
-    <span>Runux no está afiliado a Blizzard Entertainment ni a Electronic Arts.</span>
+    <span>Runux no está afiliado a Blizzard Entertainment, Electronic Arts, Sega ni Sony.</span>
   </div>
 </footer>
 
