@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api, errorMessage, type Config, type GeInstall, type Progress, type ProtonBuild, type Runner } from "../api";
@@ -26,10 +27,13 @@ export function Settings({
   const [draft, setDraft] = useState(config);
   const [protons, setProtons] = useState<ProtonBuild[] | null>(null);
 
+  const [version, setVersion] = useState<string | null>(null);
+
   const loadProtons = () => api.listProtons().then(setProtons).catch(() => setProtons([]));
 
   useEffect(() => {
     loadProtons();
+    getVersion().then(setVersion).catch(() => setVersion(null));
   }, []);
 
   const [geResult, setGeResult] = useState<GeInstall | null>(null);
@@ -198,6 +202,7 @@ export function Settings({
         </div>
 
         <footer>
+          {version && <span className="footer-start muted small">Runux {version}</span>}
           <button className="ghost-btn" onClick={close}>Cancelar</button>
           <button className="play-btn small" onClick={() => onSave(draft)}>Guardar</button>
         </footer>
