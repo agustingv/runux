@@ -45,3 +45,6 @@ export const HelpIcon = ({ size = 18 }: P) =>
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
     <line x1="12" y1="17" x2="12.01" y2="17" />
   </>);
+
+export const ChevronIcon = ({ size = 18 }: P) =>
+  svg(size, <polyline points="6 9 12 15 18 9" />);

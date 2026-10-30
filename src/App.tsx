@@ -12,6 +12,7 @@ import { Setup } from "./components/Setup";
 import { EaGameView } from "./components/EaGameView";
 import { eaKey, externalKey, HOME, Sidebar } from "./components/Sidebar";
 import { GearIcon, HelpIcon, TerminalIcon } from "./icons";
+import { useRecentlyPlayed } from "./recent";
 import { useLauncher } from "./useLauncher";
 
 export default function App() {
@@ -26,6 +27,12 @@ export default function App() {
     status, games, external, eaGames, busy, launching, progress, logs, error,
     setError, clearLogs, refresh, runTask, startTask, play, cancel, clearProgress, guard,
   } = useLauncher({ onTaskError: () => setShowConsole(true) });
+
+  const played = useRecentlyPlayed([
+    ...games.filter((g) => g.running).map((g) => g.uid),
+    ...eaGames.filter((g) => g.running).map((g) => eaKey(g.id)),
+    ...external.filter((g) => g.running).map((g) => externalKey(g.id)),
+  ]);
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch((e) => setError(errorMessage(e)));
@@ -235,6 +242,7 @@ export default function App() {
               games={games}
               external={external}
               eaGames={eaGames}
+              played={played}
               battlenetStarting={busy.has(TASK.battlenet) && !status.battlenetRunning}
               battlenetInstalling={busy.has(TASK.installer)}
               battlenetProgress={progress[TASK.installer]}

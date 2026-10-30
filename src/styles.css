@@ -259,7 +259,29 @@ code { font-family: ui-monospace, monospace; font-size: 12.5px; padding: 1px 5px
 .hero-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .hero-actions .ghost-btn { height: 48px; }
 .card.empty p { margin: 0 0 4px; }
+.clients { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.card.client {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px;
+  background: linear-gradient(120deg, var(--hero-tint), var(--bg-card) 70%);
+}
+.card.client.on { border-color: var(--green); }
+.client-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card.client h2 { font-size: 17px; }
+.card.client p { margin: 0; }
+.card.client .hero-actions .ghost-btn { height: 36px; }
+.section { display: flex; flex-direction: column; gap: 12px; }
 .section-title { margin-top: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.section > .section-title {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 0; border: 0; background: none;
+}
+.section > .section-title:hover { color: var(--text); }
+.section-title svg { transition: transform .15s; }
+.section.folded .section-title svg { transform: rotate(-90deg); }
+.section-count {
+  padding: 1px 7px; border-radius: 10px; background: var(--bg-hover);
+  font-size: 11px; letter-spacing: 0; color: var(--muted);
+}
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
 .tile {
   display: flex; flex-direction: column; gap: 6px; padding: 0 0 12px;
