@@ -245,6 +245,7 @@ export default function App() {
                 refresh();
               })}
               onSelect={select}
+              onOpenXcloud={guard(api.launchXcloud)}
               ea={{
                 starting: busy.has(TASK.ea) && !status.eaRunning,
                 installing: busy.has(TASK.eaInstaller),

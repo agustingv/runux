@@ -73,6 +73,8 @@ export const api = {
   closeBattlenet: () => invoke<void>("close_battlenet"),
   installEa: () => invoke<void>("install_ea"),
   launchEa: () => invoke<void>("launch_ea"),
+  /** Opens Xbox Cloud Gaming in a browser window of its own. */
+  launchXcloud: () => invoke<void>("launch_xcloud"),
   closeEa: () => invoke<void>("close_ea"),
   openEaPrefix: () => invoke<void>("open_ea_prefix"),
   launchEaGame: (id: string) => invoke<void>("launch_ea_game", { id }),

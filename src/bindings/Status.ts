@@ -4,6 +4,7 @@ import type { HelpSection } from "./HelpSection";
 import type { InstallHints } from "./InstallHints";
 import type { Missing32Bit } from "./Missing32Bit";
 import type { Runner } from "./Runner";
+import type { XcloudInfo } from "./XcloudInfo";
 
 export type Status = { runner: Runner, 
 /**
@@ -33,4 +34,4 @@ eaOverlay: boolean | null,
 /**
  * Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing.
  */
-missing32bit: Missing32Bit | null, installHints: InstallHints, };
+missing32bit: Missing32Bit | null, installHints: InstallHints, xcloud: XcloudInfo, };

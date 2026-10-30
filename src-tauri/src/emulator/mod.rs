@@ -13,7 +13,7 @@ mod flycast;
 mod pcsx2;
 mod playstation;
 mod ppsspp;
-mod program;
+pub(crate) mod program;
 mod rpcs3;
 mod scummvm;
 

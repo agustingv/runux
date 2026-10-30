@@ -25,6 +25,8 @@ pub enum Task {
     Import,
     /// An installer run from a disc.
     DiscInstall,
+    /// The browser showing Xbox Cloud Gaming.
+    Xcloud,
 }
 
 impl Task {
@@ -40,6 +42,7 @@ impl Task {
             Task::GeProton => "ge-proton",
             Task::Import => "import",
             Task::DiscInstall => "disc-install",
+            Task::Xcloud => "xcloud",
         }
     }
 }
@@ -51,7 +54,7 @@ mod tests {
     #[test]
     fn names_match_the_exported_ones() {
         use Task::*;
-        for task in [Prefix, Dxvk, Battlenet, Installer, Ea, EaInstaller, GeProton, Import, DiscInstall] {
+        for task in [Prefix, Dxvk, Battlenet, Installer, Ea, EaInstaller, GeProton, Import, DiscInstall, Xcloud] {
             assert_eq!(serde_json::to_value(task).unwrap(), task.name());
         }
     }

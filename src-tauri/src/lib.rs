@@ -16,6 +16,7 @@ mod proton;
 mod store;
 mod task;
 mod wine;
+mod xcloud;
 
 use config::{Config, Runner};
 use battlenet::Game;
@@ -63,6 +64,7 @@ struct Status {
     /// Set when the 32-bit graphics drivers that Battle.net and the EA app need are missing.
     missing_32bit: Option<host::Missing32Bit>,
     install_hints: host::InstallHints,
+    xcloud: xcloud::Info,
 }
 
 #[tauri::command]
@@ -118,6 +120,7 @@ async fn status(cfg: &Config, cmdlines: &[String]) -> Status {
         ea_overlay: ea::overlay_enabled(&cfg.ea()),
         missing_32bit: host::missing_32bit_graphics(),
         install_hints: host::install_hints(),
+        xcloud: xcloud::info(),
     }
 }
 
@@ -158,6 +161,11 @@ async fn close_battlenet(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn install_ea(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     ea::install(&app, &state.config().ea()).await
+}
+
+#[tauri::command]
+fn launch_xcloud(app: AppHandle) -> Result<(), String> {
+    xcloud::launch(&app)
 }
 
 #[tauri::command]
@@ -578,6 +586,7 @@ pub fn run() {
             remove_external_game,
             launch_external_game,
             open_external_folder,
+            launch_xcloud,
             rename_external_game,
             relocate_external_game,
             set_external_env,

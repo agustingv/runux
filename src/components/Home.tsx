@@ -18,6 +18,7 @@ interface Props {
   onCloseBattlenet: () => void;
   onSelect: (uid: string) => void;
   ea: EaProps;
+  onOpenXcloud: () => void;
 }
 
 interface EaProps {
@@ -60,6 +61,32 @@ function EaCard({ status, ea }: { status: Status; ea: EaProps }) {
           {ea.starting ? "Abriendo…" : "Abrir EA app"}
         </button>
       )}
+    </section>
+  );
+}
+
+/** Game Pass's cloud games, in a browser: the Xbox app itself can't run under Wine. */
+function XcloudCard({ status, onOpen }: { status: Status; onOpen: () => void }) {
+  const { browser, installHint } = status.xcloud;
+  return (
+    <section className="card hero">
+      <div>
+        <h2>Xbox Cloud Gaming</h2>
+        {browser ? (
+          <p className="muted">
+            Juega en la nube a los juegos de Game Pass Ultimate, en una ventana propia de {browser}. La primera
+            vez, inicia sesión con tu cuenta de Microsoft. Necesita buena conexión y, mejor, un mando.
+          </p>
+        ) : (
+          <p className="muted">
+            Juega en la nube a los juegos de Game Pass Ultimate. Necesita Microsoft Edge, o Chrome, Chromium o
+            Brave: instálalo con <code>{installHint}</code>.
+          </p>
+        )}
+      </div>
+      <button className="play-btn" onClick={onOpen} disabled={!browser}>
+        {browser ? "Abrir Xbox Cloud Gaming" : "Falta el navegador"}
+      </button>
     </section>
   );
 }
@@ -108,7 +135,7 @@ function BattlenetCard({ status, starting, installing, progress, onInstall, onOp
 
 export function Home({
   status, games, external, eaGames, battlenetStarting, battlenetInstalling, battlenetProgress,
-  onInstallBattlenet, onOpenBattlenet, onCloseBattlenet, onSelect, ea,
+  onInstallBattlenet, onOpenBattlenet, onCloseBattlenet, onSelect, ea, onOpenXcloud,
 }: Props) {
   return (
     <div className="home">
@@ -124,6 +151,8 @@ export function Home({
       />
 
       <EaCard status={status} ea={ea} />
+
+      <XcloudCard status={status} onOpen={onOpenXcloud} />
 
       {status.battlenetInstalled && <h3 className="section-title">Juegos de Battle.net</h3>}
       {!status.battlenetInstalled ? null : games.length === 0 ? (
