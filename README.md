@@ -34,10 +34,13 @@ comparten todas las páginas. Para añadir uno: una variante en
 `external::Kind`, un módulo que implemente `Emulator` y su entrada en `emulator::ALL`.
 
 Las imágenes de cada juego salen de su disco cuando las trae (`art()`: `ICON0.PNG` y
-`PIC1.PNG` de PS3 y PSP, leídos de la `.iso` con `iso9660.rs`). Los de PS1 y PS2 no traen
-ninguna, así que `cover()` dice dónde descargar su carátula: de las colecciones de xlenore en
-GitHub, por el código del disco, que `emulator/playstation.rs` saca del `SYSTEM.CNF`, del
-nombre del archivo o del título en la lista de juegos del emulador. Runux no se conecta por su
+`PIC1.PNG` de PS3 y PSP, leídos de la `.iso` con `iso9660.rs`). Los de PS1, PS2 y Dreamcast no
+traen ninguna, así que `cover()` dice dónde descargar su carátula. Las de PS1 y PS2, de las
+colecciones de xlenore en GitHub, por el código del disco, que `emulator/playstation.rs` saca
+del `SYSTEM.CNF`, del nombre del archivo o del título en la lista de juegos del emulador. Las de
+Dreamcast, de libretro-thumbnails, por el nombre Redump del juego, que `emulator/dreamcast.rs`
+busca en `dreamcast.tsv` por el código de la cabecera del disco (IP.BIN) o por el nombre del
+archivo; la tabla se regenera con `src-tauri/scripts/dreamcast-games.py`. Runux no se conecta por su
 cuenta: cada carátula se descarga solo cuando el usuario pulsa «Descargar carátula» en la
 página del juego, y se guarda en `~/.cache/runux/covers/`.
 

@@ -25,7 +25,7 @@ interface Props {
 }
 
 /**
- * The box art of a game whose disc carries no pictures (PS1, PS2): only
+ * The box art of a game whose disc carries no pictures (PS1, PS2, Dreamcast): only
  * downloaded when the player asks, as Runux never connects on its own.
  */
 function CoverRow({ game }: { game: ExternalGame }) {
@@ -61,7 +61,7 @@ function CoverRow({ game }: { game: ExternalGame }) {
             <button className="link-btn" disabled={busy} onClick={() => run(() => api.downloadCover(game.id))}>
               {busy ? "Descargando…" : "Descargar carátula"}
             </button>
-            <small className="muted"> · De GitHub, buscándola por el código del disco ({info.serial}), lo único que se envía.</small>
+            <small className="muted"> · De GitHub, buscándola por {info.lookup} ({info.key}), lo único que se envía.</small>
           </>
         )}
         {error && <div className="note">{error}</div>}

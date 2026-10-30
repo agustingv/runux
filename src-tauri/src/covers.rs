@@ -1,4 +1,4 @@
-//! Box art for games whose discs carry no pictures (PS1, PS2). Runux never
+//! Box art for games whose discs carry no pictures (PS1, PS2, Dreamcast). Runux never
 //! fetches it on its own: the player downloads each one from the game's page,
 //! and from then on it's read from the cache.
 
@@ -14,14 +14,21 @@ fn path(cover: &Cover) -> PathBuf {
     config::cache_dir().join("covers").join(&cover.file)
 }
 
-/// Whether `data` is a JPEG, as the covers are.
-fn is_jpeg(data: &[u8]) -> bool {
-    data.starts_with(&[0xff, 0xd8, 0xff])
+/// The type of `data` if it's a picture, as covers are: JPEG or PNG.
+fn image_type(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else {
+        None
+    }
 }
 
-/// The cover, if it was downloaded.
-pub fn cached(cover: &Cover) -> Option<Vec<u8>> {
-    std::fs::read(path(cover)).ok()
+/// The cover and its type, if it was downloaded.
+pub fn cached(cover: &Cover) -> Option<(&'static str, Vec<u8>)> {
+    let data = std::fs::read(path(cover)).ok()?;
+    Some((image_type(&data)?, data))
 }
 
 pub fn is_cached(cover: &Cover) -> bool {
@@ -38,10 +45,10 @@ pub async fn download(cover: &Cover) -> Result<(), String> {
         .await
         .map_err(unreachable)?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(format!("La colección de carátulas no tiene la de {}", cover.serial));
+        return Err(format!("La colección de carátulas no tiene la de {}", cover.key));
     }
     let data = response.error_for_status().map_err(unreachable)?.bytes().await.map_err(unreachable)?;
-    if !is_jpeg(&data) || data.len() > MAX_SIZE {
+    if image_type(&data).is_none() || data.len() > MAX_SIZE {
         return Err("Lo descargado no es una carátula".into());
     }
     let path = path(cover);
@@ -66,8 +73,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn takes_only_jpegs() {
-        assert!(is_jpeg(b"\xff\xd8\xff\xe0 JFIF"));
-        assert!(!is_jpeg(b"404: Not Found"));
+    fn takes_only_pictures() {
+        assert_eq!(image_type(b"\xff\xd8\xff\xe0 JFIF"), Some("image/jpeg"));
+        assert_eq!(image_type(b"\x89PNG\r\n\x1a\nIHDR"), Some("image/png"));
+        assert_eq!(image_type(b"404: Not Found"), None);
     }
 }

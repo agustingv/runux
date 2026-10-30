@@ -2,7 +2,7 @@
 
 use super::program::{Install, Program};
 use crate::help::tilde;
-use super::{is_word, list, rom, section, text, Emulator, Fix, HelpSection, Media};
+use super::{dreamcast, is_word, list, rom, section, text, Cover, Emulator, Fix, HelpSection, Media};
 use crate::external::{ExternalGame, Kind};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,6 +11,28 @@ use tokio::process::Command;
 const PROGRAM: Program = Program { bins: &["flycast"], paths: &[], flatpak: Some("org.flycast.Flycast") };
 
 pub struct Flycast;
+
+/// Where the box art comes from, and how the game is told.
+fn cover_help() -> HelpSection {
+    let cache = tilde(&crate::config::cache_dir().join("covers"));
+    section(
+        "Carátula",
+        vec![
+            text(format!(
+                "Los discos no traen imágenes, así que la carátula se descarga de la colección \
+                 `libretro-thumbnails` de GitHub, la de RetroArch. Runux no se conecta por su cuenta: en la página \
+                 del juego, pulsa «Descargar carátula». Solo se envía el nombre del juego, y la imagen se guarda \
+                 en `{cache}`; «Quitar» la borra."
+            )),
+            text(
+                "El juego lo reconoce por el código de la cabecera del disco (en `.gdi`, `.cue` y `.cdi`) o, si \
+                 no, por el nombre del archivo, el de su carpeta o el título del disco. Si el botón no aparece, \
+                 Runux no ha sabido cuál es: ponle al archivo el nombre que le da Redump, como \
+                 `Crazy Taxi (USA).chd`.",
+            ),
+        ],
+    )
+}
 
 /// Opens `rom`, in `dir`, with `settings` as `-config` options, which apply
 /// to this run only: they don't touch `emu.cfg`.
@@ -43,6 +65,10 @@ impl Emulator for Flycast {
 
     fn install_hint(&self) -> Option<String> {
         PROGRAM.flatpak_hint()
+    }
+
+    fn cover(&self, rom: &Path) -> Option<Cover> {
+        dreamcast::cover(rom)
     }
 
     fn media(&self) -> Media {
@@ -96,6 +122,7 @@ impl Emulator for Flycast {
                         .into(),
                 ])],
             ),
+            cover_help(),
         ]
     }
 

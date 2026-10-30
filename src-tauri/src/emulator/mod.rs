@@ -7,6 +7,7 @@
 //! Adding one takes a `Kind` variant, a module implementing `Emulator`, and
 //! its entry in `ALL`.
 
+mod dreamcast;
 mod duckstation;
 mod flycast;
 mod pcsx2;
@@ -110,10 +111,13 @@ pub enum Art {
 /// pictures.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cover {
-    /// The game's serial, which it's looked up by.
-    pub serial: String,
+    /// What it's looked up by, the only thing sent: the game's serial or
+    /// its name.
+    pub key: String,
+    /// What `key` is, e.g. `el código del disco`.
+    pub lookup: &'static str,
     pub url: String,
-    /// Its file in the covers' cache: `<system>/<serial>.jpg`.
+    /// Its file in the covers' cache: `<system>/<key>.<jpg|png>`.
     pub file: String,
 }
 
@@ -122,7 +126,8 @@ impl Cover {
     /// DuckStation and PCSX2 users point their cover downloaders at.
     fn xlenore(repo: &str, system: &str, serial: &str) -> Cover {
         Cover {
-            serial: serial.into(),
+            key: serial.into(),
+            lookup: "el código del disco",
             url: format!("https://raw.githubusercontent.com/xlenore/{repo}/main/covers/default/{serial}.jpg"),
             file: format!("{system}/{serial}.jpg"),
         }

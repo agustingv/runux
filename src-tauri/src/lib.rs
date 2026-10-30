@@ -312,7 +312,7 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
                 if let Some(png) = emu.art(rom, emulator::Art::Icon) {
                     return Some(data_url("image/png", &png));
                 }
-                return covers::cached(&emu.cover(rom)?).map(|jpeg| data_url("image/jpeg", &jpeg));
+                return covers::cached(&emu.cover(rom)?).map(|(mime, data)| data_url(mime, &data));
             }
             game.exe?
         } else {
@@ -332,8 +332,11 @@ async fn game_icon(state: State<'_, AppState>, key: String) -> Result<Option<Str
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 struct CoverInfo {
-    /// The game's serial, the only thing sent to download it.
-    serial: String,
+    /// What it's looked up by, the only thing sent to download it: the
+    /// game's serial or name.
+    key: String,
+    /// What `key` is, e.g. `el código del disco`.
+    lookup: String,
     downloaded: bool,
 }
 
@@ -348,7 +351,7 @@ fn external_cover(id: &str) -> Result<Option<emulator::Cover>, String> {
 #[tauri::command]
 async fn cover_info(id: String) -> Result<Option<CoverInfo>, String> {
     tokio::task::spawn_blocking(move || {
-        Ok(external_cover(&id)?.map(|c| CoverInfo { downloaded: covers::is_cached(&c), serial: c.serial }))
+        Ok(external_cover(&id)?.map(|c| CoverInfo { downloaded: covers::is_cached(&c), lookup: c.lookup.into(), key: c.key }))
     })
     .await
     .map_err(|e| e.to_string())?

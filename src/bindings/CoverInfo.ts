@@ -5,6 +5,11 @@
  */
 export type CoverInfo = { 
 /**
- * The game's serial, the only thing sent to download it.
+ * What it's looked up by, the only thing sent to download it: the
+ * game's serial or name.
  */
-serial: string, downloaded: boolean, };
+key: string, 
+/**
+ * What `key` is, e.g. `el código del disco`.
+ */
+lookup: string, downloaded: boolean, };

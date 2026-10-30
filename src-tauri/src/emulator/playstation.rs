@@ -115,7 +115,7 @@ pub fn entries(db: &str) -> Vec<Entry> {
 }
 
 /// The entry of `entries` that `names` (file or folder names, or serials)
-/// stand for, and the serial matched: one in a name first, then a title equal
+/// stand for, and the serial matched (empty if it has none): one in a name first, then a title equal
 /// to an entry's name, then the same title without regions or tags,
 /// preferring the region the name says.
 pub fn identify<'a>(entries: impl IntoIterator<Item = &'a Entry>, names: &[String]) -> Option<(&'a Entry, String)> {
@@ -138,7 +138,7 @@ pub fn identify<'a>(entries: impl IntoIterator<Item = &'a Entry>, names: &[Strin
             continue;
         };
         if best.as_ref().is_none_or(|(r, ..)| rank < *r) {
-            best = Some((rank, entry, entry.codes[0].clone()));
+            best = Some((rank, entry, entry.codes.first().cloned().unwrap_or_default()));
         }
     }
     best.map(|(_, entry, serial)| (entry, serial))
