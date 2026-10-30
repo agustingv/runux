@@ -1,6 +1,6 @@
 [package]
 name = "runux"
-version = "0.1.21"
+version = "0.1.22"
 description = "Lanzador de juegos de Windows para Linux: Battle.net, EA app y más"
 authors = ["Agustín García <contacto@agustin-garcia.es>"]
 edition = "2024"
